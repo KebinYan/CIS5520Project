@@ -9,7 +9,14 @@ data CandyShape = Triangle | Circle | Square | Star | Heart | Diamond | Minus | 
 data Candy = Candy { 
     candyShape :: CandyShape, 
     candyEffect :: CandyEffect
-} | EmptyCandy deriving (Eq, Show)
+} | EmptyCandy deriving (Show)
+
+instance Eq Candy where
+    (==) :: Candy -> Candy -> Bool
+    EmptyCandy == EmptyCandy = True
+    EmptyCandy == _ = False
+    Candy s1 e1 == Candy s2 e2 = s1 == s2 && e1 == e2
+    _ == _ = False
 
 bombCandy, stripedRowCandy, stripedCrossCandy, emptyCandy :: Candy
 bombCandy = Candy { candyShape = Asterisk, candyEffect = Bomb }
@@ -24,8 +31,4 @@ getCandyShapeCount = length [Triangle .. Asterisk]
 -- | Counting the number of constructors
 getCandyEffectCount :: Int
 getCandyEffectCount = length [Normal .. StripedCross]
-
--- | Check if two candies are the same type
-isSameCandy :: Candy -> Candy -> Bool
-isSameCandy c1 c2 = candyShape c1 == candyShape c2
 

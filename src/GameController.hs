@@ -71,7 +71,7 @@ gameStep state = do
 
     input <- getLine
     case parseAction input of
-        Right action -> 
+        Right action ->
             case action of
                 Quit -> putStrLn "Quitting game"
                 _ -> do
@@ -89,7 +89,9 @@ gameStep state = do
 handleAction :: GameState -> Action -> IO  GameState
 handleAction state action = case action of
     Swap (x1, y1) (x2, y2) -> do
-        putStrLn $ "Swapping (" ++ show x1 ++ "," ++ show y1 ++ ") with (" ++ show x2 ++ "," ++ show y2 ++ ")"
+        putStrLn $
+            "Swapping (" ++ show x1 ++ "," ++ show y1 ++ ") with ("
+            ++ show x2 ++ "," ++ show y2 ++ ")"
         let newGrid = applySwap (currentGrid state) (x1, y1) (x2, y2)
         (_, newState) <- runStateT (updateGridState newGrid) state
         printGrid newGrid
@@ -130,11 +132,12 @@ wsP p = many space *> p <* many space
 
 applyAction :: GameGrid -> Action -> GameGrid
 applyAction g (Disappear coords) = applyDisappear g coords
-applyAction g (Trigger (coordinate, candyEffect)) = applyTrigger g coordinate candyEffect
+applyAction g (Trigger (coordinate, candyEffect)) =
+    applyTrigger g coordinate candyEffect
 applyAction g (Swap (x1, y1) (x2, y2)) = applySwap g (x1, y1) (x2, y2)
 applyAction g (Click (x, y)) = applyClick g (x, y)
-applyAction g Undo = g  -- TODO:
-applyAction g Quit = g  -- TODO:
+applyAction g Undo = g
+applyAction g Quit = g
 
 applySwap :: GameGrid -> Coordinate -> Coordinate -> GameGrid
 applySwap g (x1, y1) (x2, y2)
@@ -177,36 +180,41 @@ findNormalCandyCrushables grid coord =
     case getCandyAt (board grid) coord of
         Nothing -> []  -- no candy at the given coordinate, return no actions
         Just candy ->
-            let visited = explore coord grid (candyShape candy) (Set.singleton coord)
-            in [constructDisappear (Set.toList visited) | Set.size visited >= 3]  -- create an action if at least 3 candies match
+            let visited = explore coord grid candy (Set.singleton coord)
+            in [constructDisappear (Set.toList visited) | Set.size visited >= 3]
+            -- create a Disappear action if at least 3 candies match
   where
     -- four cardinal directions: up, down, left, right
     directions :: [(Int, Int)]
     directions = [(1, 0), (-1, 0), (0, 1), (0, -1)]
 
     -- explore at most two steps in each direction
-    explore :: Coordinate -> GameGrid -> CandyShape -> Set.Set Coordinate -> Set.Set Coordinate
-    explore start grid shape visited =
-        foldl (checkDirection start grid shape) visited directions
+    explore :: Coordinate -> GameGrid -> Candy ->
+        Set.Set Coordinate -> Set.Set Coordinate
+    explore start grid candy visited =
+        foldl (checkDirection start grid candy) visited directions
 
     -- check a single direction for matching candies
-    checkDirection :: Coordinate -> GameGrid -> CandyShape -> Set.Set Coordinate -> (Int, Int) -> Set.Set Coordinate
-    checkDirection (x, y) grid shape visited (dx, dy) =
-        let step1 = (x + dx, y + dy)  -- define 2 steps in the direction
+    checkDirection :: Coordinate -> GameGrid -> Candy ->
+        Set.Set Coordinate -> (Int, Int) -> Set.Set Coordinate
+    checkDirection (x, y) grid candy visited (dx, dy) =
+        let step1 = (x + dx, y + dy)
             step2 = (x + 2 * dx, y + 2 * dy)
-        in case addIfMatch step1 grid shape visited of
-            Nothing -> visited  -- first step doesn't match, stop exploration in this direction
-            Just visited1 -> case addIfMatch step2 grid shape visited1 of
-                Nothing -> visited1  
-                Just visited2 -> visited2  -- both steps match
+        in case addIfMatch step1 grid candy visited of
+            -- first step doesn't match, stop exploration in this direction
+            Nothing -> visited
+            Just visited1 -> fromMaybe visited1 
+                (addIfMatch step2 grid candy visited1)
 
-    -- check if a single step matches the given candy shape
-    addIfMatch :: Coordinate -> GameGrid -> CandyShape -> Set.Set Coordinate -> Maybe (Set.Set Coordinate)
-    addIfMatch coord grid shape visited
-        | Set.member coord visited = Nothing  -- already visited 
+    -- check if a single step matches the given candy
+    addIfMatch :: Coordinate -> GameGrid -> Candy -> 
+        Set.Set Coordinate -> Maybe (Set.Set Coordinate)
+    addIfMatch coord grid candy visited
+        | Set.member coord visited = Nothing
         | otherwise =
             case getCandyAt (board grid) coord of
-                Just candy | candyShape candy == shape -> Just (Set.insert coord visited)  -- match found, add to visited
+                Just c | c == candy -> 
+                    Just (Set.insert coord visited)  -- match found
                 _ -> Nothing  -- no match
 
 applyClick :: GameGrid -> Coordinate -> GameGrid
@@ -225,25 +233,30 @@ applyDisappear (GameGrid grid emptyCandyCoords) coords =
     in case specialCandy of
         Just candy -> do
             let position = coords !! (length coords `div` 2)
-                in GameGrid (setCandyAt clearGrid position candy) 
+                in GameGrid (setCandyAt clearGrid position candy)
                             emptyCandyCoords
         Nothing -> GameGrid clearGrid emptyCandyCoords
 
 applyTrigger :: GameGrid -> Coordinate -> CandyEffect -> GameGrid
-applyTrigger (GameGrid grid emptyCandyCoords) (x, y) StripedRow = GameGrid (clearRow x grid) emptyCandyCoords
-applyTrigger (GameGrid grid emptyCandyCoords) (x, y) StripedCross = GameGrid (clearColumn y (clearRow x grid)) emptyCandyCoords
-applyTrigger (GameGrid grid emptyCandyCoords) (x, y) Bomb = GameGrid (clearSurrounding grid (x, y)) emptyCandyCoords
+applyTrigger (GameGrid grid emptyCandyCoords) (x, y) StripedRow = 
+    GameGrid (clearRow x grid) emptyCandyCoords
+applyTrigger (GameGrid grid emptyCandyCoords) (x, y) StripedCross = 
+    GameGrid (clearColumn y (clearRow x grid)) emptyCandyCoords
+applyTrigger (GameGrid grid emptyCandyCoords) (x, y) Bomb = 
+    GameGrid (clearSurrounding grid (x, y)) emptyCandyCoords
 applyTrigger grid _ _ = grid
 
 -- Clear a row of candies
 clearRow :: Int -> [[Candy]] -> [[Candy]]
 clearRow x grid =
-    [if rowIdx == x then replicate (length row) emptyCandy else row | (rowIdx, row) <- zip [0..] grid]
+    [if rowIdx == x then replicate (length row) emptyCandy else row 
+        | (rowIdx, row) <- zip [0..] grid]
 
 -- Clear a column of candies
 clearColumn :: Int -> [[Candy]] -> [[Candy]]
 clearColumn y grid =
-    [ [if colIdx == y then emptyCandy else candy | (colIdx, candy) <- zip [0..] row] | row <- grid ]
+    [ [if colIdx == y then emptyCandy else candy 
+        | (colIdx, candy) <- zip [0..] row] | row <- grid ]
 
 -- Clear candies in a 3x3 grid around a given coordinate
 clearSurrounding :: [[Candy]] -> Coordinate -> [[Candy]]
@@ -278,21 +291,18 @@ fillAndCrushStateIO state = do
         shapes = candyShapes (difficulty state)
     filledGrid <- fillAndCrushUntilStable board shapes
     return $ state { currentGrid = filledGrid }
-    
 
 fillAndCrushUntilStable :: GameGrid -> [CandyShape] -> IO GameGrid
 fillAndCrushUntilStable grid shapes = do
     -- Fill the grid with random candies
     newBoard <- fillBoard (board grid) shapes
     let filledGrid = GameGrid newBoard (getEmptyCandyCoords grid)
-    
     -- Auto-crush the grid if there are crushables
     case autoCrush filledGrid of
-        Nothing -> return filledGrid  -- No crushables left; return the stable grid
+        -- No crushables left; return the stable grid
+        Nothing -> return filledGrid  
         Just crushedGrid ->
-            if crushedGrid == filledGrid
-                then return filledGrid  -- The board is stable; return it
-                else fillAndCrushUntilStable crushedGrid shapes  -- Continue until stable
+            fillAndCrushUntilStable crushedGrid shapes  -- Continue until stable
 
 
 -- Fill the entire board row by row
@@ -305,10 +315,10 @@ fillBoard (row:rows) shapes = do
 
 -- Fill a single row, handling empty candies
 fillRow :: [Candy] -> [CandyShape] -> IO [Candy]
-fillRow [] _ = return [] 
+fillRow [] _ = return []
 fillRow (candy:rest) shapes
     | candy == EmptyCandy = do
-        newCandy <- generateRandomCandy shapes 
+        newCandy <- generateRandomCandy shapes
         filledRest <- fillRow rest shapes       -- Recursively fill the rest of the row
         return (newCandy : filledRest)          -- Combine the result
     | otherwise = do
@@ -319,7 +329,7 @@ fillRow (candy:rest) shapes
 -- Auto-crush all crushable candies except special candies
 autoCrush :: GameGrid -> Maybe GameGrid
 autoCrush board =
-    let actions = Prelude.filter (isNormalDisappear board) (findAllCrushables board) 
+    let actions = Prelude.filter (isNormalDisappear board) (findAllCrushables board)
         newGrid = applyActions board actions
     in if null actions || newGrid == board
        then Nothing
