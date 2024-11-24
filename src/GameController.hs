@@ -82,9 +82,19 @@ gameStep state = do
         Left _       -> do
             putStrLn "Invalid action, please try again."
             gameStep state
-    -- fillGrid
-    -- auto-crush all crushables in the new grid
 
+parseAction :: String -> Either ParseError Action
+parseAction = parse actionParser
+
+actionParser :: Parser Action
+actionParser = wsP $ choice
+    [ Swap <$> (string "swap" *>
+                ((,) <$> wsP intP <*> wsP intP)) <*>
+                ((,) <$> wsP intP <*> wsP intP)
+    , Click <$> (string "click" *> ((,) <$> wsP intP <*> wsP intP))
+    , string "undo" *> pure Undo
+    , string "quit" *> pure Quit
+    ]
 
 handleAction :: GameState -> Action -> IO  GameState
 handleAction state action = case action of
@@ -110,25 +120,6 @@ handleAction state action = case action of
     _ -> do
         putStrLn "Invalid action"
         return state
-
-parseAction :: String -> Either ParseError Action
-parseAction = parse actionParser
-
-actionParser :: Parser Action
-actionParser = wsP $ choice
-    [ Swap <$> (string "swap" *>
-                ((,) <$> wsP intP <*> wsP intP)) <*>
-                ((,) <$> wsP intP <*> wsP intP)
-    , Click <$> (string "click" *> ((,) <$> wsP intP <*> wsP intP))
-    , string "undo" *> pure Undo
-    , string "quit" *> pure Quit
-    ]
-
-intP :: Parser Int
-intP = read <$> some digit
-
-wsP :: Parser a -> Parser a
-wsP p = many space *> p <* many space
 
 applyAction :: GameGrid -> Action -> GameGrid
 applyAction g (Disappear coords) = applyDisappear g coords

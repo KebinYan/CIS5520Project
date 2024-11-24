@@ -8,9 +8,6 @@ import GameController
 import GameGrid
 import GameUtils
 
-testGrid :: [[Candy]]
-testGrid = [ [ Candy { candyShape = t, candyEffect = e } 
-               | t <- [Triangle .. Asterisk], e <- [Normal .. StripedCross] ]] 
 main :: IO ()
 main = do 
     putStrLn "Welcome to Candy Crush!" 

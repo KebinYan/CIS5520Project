@@ -4,7 +4,8 @@
 -- All `Parser`s must be built using the following functions
 -- exported by this file, as well as the `Functor`, `Applicative` and
 -- `Alternative` operations.
-module Parser(Parser, doParse, get, eof, filter, 
+module Parser(Parser, doParse, wsP, intP,
+                          get, eof, filter, 
                           parse, parseFromFile, ParseError,
                           satisfy, alpha, digit, upper, lower, space,
                           char, string, int,
@@ -39,6 +40,13 @@ instance Alternative Parser where
   empty = P $ const Nothing
   p1 <|> p2 = P $ \s -> doParse p1 s `firstJust` doParse p2 s
 
+-- | Parse an integer
+intP :: Parser Int
+intP = read <$> some digit
+
+-- | Strip whitespace from the beginning and end of a parser
+wsP :: Parser a -> Parser a
+wsP p = many space *> p <* many space
 
 -- | Combine two Maybe values together, producing the first
 -- successful result

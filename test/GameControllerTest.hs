@@ -21,21 +21,6 @@ candy5 = Candy Star Normal
 candySpecial :: Candy
 candySpecial = bombCandy
 
--- Test Action Parser
-testParseActionSwap :: Test
-testParseActionSwap = TestCase $ do
-    let action = parseAction "swap 1 2 3 4"
-    case action of
-        Right a -> assertEqual "Action should be Swap" a (Swap (1, 2) (3, 4))
-        Left err -> assertFailure $ "Parsing failed with error: " ++ show err
-
-testParseActionInvalid :: Test
-testParseActionInvalid = TestCase $ do
-    let action = parseAction "invalid"
-    case action of
-        Right a -> assertFailure $ "Parsing should have failed, but got: " ++ show a
-        Left _ -> return ()
-
 -- Test grids
 initialGrid :: GameGrid
 initialGrid = GameGrid
@@ -50,6 +35,43 @@ crushableGrid = GameGrid
     , [candy2, candy2, candy2]
     , [candy2, candy1, bombCandy]
     ] []
+
+gridWithEmptyCandy :: GameGrid
+gridWithEmptyCandy = GameGrid
+    [ [candy1, candy1, candy3]
+    , [candy2, EmptyCandy, EmptyCandy]
+    , [candy2, EmptyCandy, EmptyCandy]
+    ] [(1, 1), (1, 2), (2, 1), (2, 2)]
+
+-- Test contructDisappear: coordinates should be sorted
+testConstructDisappear :: Test
+testConstructDisappear = TestCase $ do
+    let disappear = constructDisappear [(1, 2), (1, 0), (1, 3)]
+    let expectedDisappear = Disappear [(1, 0), (1, 2), (1, 3)]
+    assertEqual "Disappear should be equal" expectedDisappear disappear
+
+-- Test constructActionResult: Actions should be sorted
+testConstructActionResult :: Test
+testConstructActionResult = TestCase $ do
+    let actionResults = constructActionResult crushableGrid
+            [Quit, Click (2, 1), Disappear [(0, 0), (0, 1), (0, 2)], Trigger ((2, 2), Bomb)]
+        expectedActions = [Quit, Click (2, 1), Disappear [(0, 0), (0, 1), (0, 2)], Trigger ((2, 2), Bomb)]
+    assertEqual "ActionResults should be equal" expectedActions (actions actionResults)
+
+-- Test Action Parser
+testParseAction :: Test
+testParseAction = TestList [
+    "Parse swap action" ~:
+        parseAction "swap 1 2 3 4" ~?= Right (Swap (1, 2) (3, 4)),
+    "Parse click action" ~:
+        parseAction "click 1 2" ~?= Right (Click (1, 2)),
+    "Parse undo action" ~:
+        parseAction "undo" ~?= Right Undo,
+    "Parse quit action" ~:
+        parseAction "quit" ~?= Right Quit,
+    "Parse invalid action" ~:
+        parseAction "invalid" ~?= Left "Invalid action"
+  ]
 
 testSwapCandies :: Test
 testSwapCandies = TestCase $ do
@@ -197,21 +219,26 @@ testApplyAction6 = TestCase $ do
 testRedeemSpecialCandy :: Test
 testRedeemSpecialCandy = TestList [
     "Create a striped row candy with 4 candies" ~:
-        redeemSpecialCandy (Disappear [(0, 0), (0, 1), (0, 2), (0, 3)]) ~?= 
+        redeemSpecialCandy (Disappear [(0, 0), (0, 1), (0, 2), (0, 3)]) ~?=
             Just stripedRowCandy,
     "Create a bomb candy with 5 candies" ~:
-        redeemSpecialCandy (Disappear [(0, 0), (0, 1), (0, 2), (0, 3), (0, 4)]) ~?= 
+        redeemSpecialCandy (Disappear [(0, 0), (0, 1), (0, 2), (0, 3), (0, 4)]) ~?=
             Just bombCandy,
     "No special candy with fewer than 4 candies" ~:
         redeemSpecialCandy (Disappear [(0, 0), (0, 1), (0, 2)]) ~?= Nothing
   ]
 
+testFillBoard :: Test
+testFillBoard = TestCase $ do
+    newBoard <- fillBoard (board gridWithEmptyCandy) [Circle, Square, Triangle, Heart, Star]
+    assertBool "No empty candies" (EmptyCandy `notElem` concat newBoard)
+
+
 -- Unit tests
 tests :: Test
 tests = TestList
     [
-        TestLabel "testParseActionSwap" testParseActionSwap,
-        TestLabel "testParseActionInvalid" testParseActionInvalid,
+        TestLabel "testParseAction" testParseAction,
         TestLabel "testSwapCandies" testSwapCandies,
         TestLabel "testFindNormalCandyCrushables1" testFindNormalCandyCrushables1,
         TestLabel "testFindNormalCandyCrushables2" testFindNormalCandyCrushables2,
@@ -220,7 +247,7 @@ tests = TestList
         TestLabel "testFindCrushables2" testFindCrushables2,
         TestLabel "testApplyDisappear" testApplyDisappear,
         TestLabel "testApplyTrigger" testApplyTrigger,
-        TestLabel "testSwapNoCrush" testSwapNoCrush, 
+        TestLabel "testSwapNoCrush" testSwapNoCrush,
         TestLabel "testSwapCrush" testSwapCrush,
         TestLabel "testApplyClick1" testApplyClick1,
         TestLabel "testApplyClick2" testApplyClick2,
