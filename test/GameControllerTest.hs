@@ -450,6 +450,25 @@ genArbGrid difficulty = do
     let board = splitIntoRows dim candies
     return $ GameGrid board []
 
+-- Arbitrary instance for GameState
+instance Arbitrary GameState where
+    arbitrary :: Gen GameState
+    arbitrary = do
+        difficulty <- arbitrary
+        grid <- genArbGrid difficulty
+        lastGrid <- oneof [Just <$> genArbGrid difficulty, pure Nothing]
+        remainingSteps <- arbitrary
+        score <- arbitrary
+        return GameState { currentGrid = grid, difficulty = difficulty, lastGrid = lastGrid, remainingSteps = remainingSteps, score = score }
+
+genArbState :: Difficulty -> Gen GameState
+genArbState difficulty = do
+    grid <- genArbGrid difficulty
+    lastGrid <- oneof [Just <$> genArbGrid difficulty, pure Nothing]
+    remainingSteps <- arbitrary
+    score <- arbitrary
+    return GameState { currentGrid = grid, difficulty = difficulty, lastGrid = lastGrid, remainingSteps = remainingSteps, score = score }
+
 instance Arbitrary Action where
     arbitrary :: Gen Action
     arbitrary = do
@@ -463,6 +482,7 @@ instance Arbitrary Action where
             , Disappear <$> listOf (genArbCoord difficulty)
             ]
 
+-- All possible action for Action type
 genArbAction :: Difficulty -> Gen Action
 genArbAction difficulty = do
     oneof 
@@ -472,6 +492,16 @@ genArbAction difficulty = do
         , pure Quit
         , Trigger <$> ((,) <$> genArbCoord difficulty <*> arbitrary)
         , Disappear <$> listOf (genArbCoord difficulty)
+        ]
+
+-- All possible user actions
+genArbUserAction :: Difficulty -> Gen Action
+genArbUserAction difficulty = do
+    oneof 
+        [ Swap <$> genArbCoord difficulty <*> genArbCoord difficulty
+        , Click <$> genArbCoord difficulty
+        , pure Undo
+        , pure Quit
         ]
 
 -- Property: Swapping candies twice results in the original grid
@@ -508,13 +538,38 @@ prop_findNormalCandyCrushablesMatch difficulty = monadicIO $ do
             in all (== head candies) candies
         allSameCandy _ _ = False
 
--- -- Property: fillAndCrushUntilStable should return a stable grid with no immediate crushables
+-- Property: fillAndCrushUntilStable should return a stable grid with no immediate crushables
 prop_fillAndCrushUntilStable :: Difficulty -> Property
 prop_fillAndCrushUntilStable difficulty = monadicIO $ do
     grid <- run $ generate $ genArbGrid difficulty
     stableGrid <- run $ fillAndCrushUntilStable grid (candyShapes difficulty)
     let crushables = findAllCrushables stableGrid
     Test.QuickCheck.Monadic.assert $ null crushables
+
+-- Property: Applying an action modifies step size correctly
+prop_actionStepSize :: Difficulty -> Property
+prop_actionStepSize difficulty = monadicIO $ do
+    initalState <- run $ generate $ genArbState difficulty
+    initalAction <- run $ generate $ genArbUserAction difficulty
+    let initalStepSize = remainingSteps initalState
+    newState <- run $ handleAction False initalState initalAction
+    let newStepSize = remainingSteps newState
+    case initalAction of
+        Undo ->
+            Test.QuickCheck.Monadic.assert $
+                newStepSize <= initalStepSize + 1
+        Quit ->
+            Test.QuickCheck.Monadic.assert $
+                newStepSize == initalStepSize
+        Trigger _ ->
+            Test.QuickCheck.Monadic.assert $
+                newStepSize == initalStepSize
+        Disappear _ ->
+            Test.QuickCheck.Monadic.assert $
+                newStepSize == initalStepSize
+        _ ->
+            Test.QuickCheck.Monadic.assert $
+                newStepSize == initalStepSize - 1
 
 -- Unit tests
 runUnitTests :: IO Counts
@@ -542,3 +597,10 @@ runQuickCheckTests = do
     quickCheck prop_findNormalCandyCrushablesMatch
     putStrLn "prop_fillAndCrushUntilStable:"
     quickCheck prop_fillAndCrushUntilStable
+    putStrLn "prop_actionStepSize:"
+    quickCheck prop_actionStepSize
+
+main :: IO ()
+main = do
+    runUnitTests >>= print
+    runQuickCheckTests
