@@ -1,5 +1,6 @@
 module GameControllerTest where
-import Test.QuickCheck ()
+import Test.QuickCheck 
+import Test.QuickCheck.Monadic
 import Test.HUnit
 
 import GameController
@@ -233,10 +234,72 @@ testFillBoard = TestCase $ do
     newBoard <- fillBoard (board gridWithEmptyCandy) [Circle, Square, Triangle, Heart, Star]
     assertBool "No empty candies" (EmptyCandy `notElem` concat newBoard)
 
+instance Arbitrary Candy where
+    arbitrary = oneof [Candy <$> arbitrary <*> arbitrary, pure EmptyCandy]
+
+instance Arbitrary CandyShape where
+    arbitrary = elements [Triangle .. Asterisk]
+
+instance Arbitrary CandyEffect where
+    arbitrary = elements [Normal .. StripedCross]
+
+instance Arbitrary GameGrid where
+    arbitrary = do
+        dim <- chooseInt (3, 9)
+        candies <- vectorOf (dim * dim) arbitrary
+        let board = splitIntoRows dim candies
+        return $ GameGrid board []
+
+instance Arbitrary Action where
+    arbitrary = oneof [
+        Swap <$> arbitrary <*> arbitrary,
+        Click <$> arbitrary,
+        pure Undo,
+        pure Quit,
+        Trigger <$> arbitrary,
+        Disappear <$> listOf arbitrary
+        ]
+-- Property: Swapping candies twice results in the original grid
+prop_swapCandiesIdempotent :: GameGrid -> Coordinate -> Coordinate -> Property
+prop_swapCandiesIdempotent grid coord1 coord2 =
+    validCoords ==> 
+    let swappedOnce = swapCandies grid coord1 coord2
+        swappedTwice = swapCandies swappedOnce coord1 coord2
+    in swappedTwice == grid
+  where
+    validCoords = validCoordinate grid coord1 && validCoordinate grid coord2
+                  && coord1 /= coord2
+
+-- Property: Applying an action preserves the grid size
+prop_applyActionPreservesGridSize :: GameGrid -> Action -> Bool
+prop_applyActionPreservesGridSize grid action =
+    let newGrid = applyAction grid action
+    in length (board grid) == length (board newGrid) &&
+       all (\(row1, row2) -> length row1 == length row2) (zip (board grid) (board newGrid))
+
+-- Property: all candies in a crushable group are the same
+prop_findNormalCandyCrushablesMatch :: GameGrid -> Coordinate -> Property
+prop_findNormalCandyCrushablesMatch grid coord =
+    validCoordinate grid coord ==> 
+    let crushables = findNormalCandyCrushables grid coord
+    in all (allSameCandy grid) crushables
+  where
+    allSameCandy g (Disappear coords) =
+        let candies = map (getCandyAt (board g)) coords
+        in all (== head candies) (tail candies)
+    allSameCandy _ _ = True
+
+-- Property: fillAndCrushUntilStable should return a stable grid with no immediate crushables
+prop_fillAndCrushUntilStable :: GameGrid -> [CandyShape] -> Property
+prop_fillAndCrushUntilStable grid shapes =
+    not (null (board grid)) ==> monadicIO $ do
+        stableGrid <- run $ fillAndCrushUntilStable grid shapes
+        let crushables = findAllCrushables stableGrid
+        Test.QuickCheck.Monadic.assert $ null crushables
 
 -- Unit tests
-tests :: Test
-tests = TestList
+runUnitTests :: Test
+runUnitTests = TestList
     [
         TestLabel "testParseAction" testParseAction,
         TestLabel "testSwapCandies" testSwapCandies,
@@ -258,7 +321,17 @@ tests = TestList
         TestLabel "testApplyAction5" testApplyAction5,
         TestLabel "testApplyAction6" testApplyAction6
     ]
+runQuickCheckTests :: IO ()
+runQuickCheckTests = do
+    quickCheck prop_swapCandiesIdempotent
+    quickCheck prop_applyActionPreservesGridSize
+    quickCheck prop_findNormalCandyCrushablesMatch
+    quickCheck prop_fillAndCrushUntilStable
 
 -- Run the tests
 main :: IO Counts
-main = runTestTT tests
+main = do
+    counts <- runTestTT runUnitTests
+    print counts 
+    runQuickCheckTests  
+    return counts

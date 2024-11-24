@@ -1,5 +1,5 @@
 module CandyTest where
-
+import Prelude
 import Test.HUnit
 import Test.QuickCheck
 import Candy
@@ -47,12 +47,16 @@ tests :: Test
 tests = TestList [testCandyEqualInstance]
 
 runUnitTests :: IO Counts
-runUnitTests = runTestTT tests
+runUnitTests = runTestTT testCandyEqualInstance
 
 runQuickCheckTests :: IO ()
 runQuickCheckTests = do
---   quickCheck prop_specialCandyConditions
-  putStrLn "prop_candyShapeCount:"
-  quickCheck prop_candyShapeCount
-  putStrLn "prop_candyEffectCount:"
-  quickCheck prop_candyEffectCount
+    putStrLn "prop_candyShapeCount:"
+    quickCheck prop_candyShapeCount
+    putStrLn "prop_candyEffectCount:"
+    quickCheck prop_candyEffectCount
+
+main :: IO ()
+main = do
+    runUnitTests >>= print
+    runQuickCheckTests

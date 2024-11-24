@@ -1,6 +1,7 @@
 -- GameController.hs
 
 module GameController where
+import Test.QuickCheck
 
 import Control.Monad
 import Control.Monad.State

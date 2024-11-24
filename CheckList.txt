@@ -1,0 +1,38 @@
+
+Q:
+1. Use of multiple threads in the program on GUI, and main flow of the program.
+2. !! to retrieve elements given that index is valid, a more efficient DS for matrix?
+3. head given that the container is not empty
+4. deductions for project complexity, is it complex enough?
+5. More efficient way of providing hints other than simulation algorithm
+
+
+Ideas:
+1. Provide hints  
+    - figure out the best algorithm to provide hints 
+    - design how to integrate hints action into the game
+    - implement hints
+2. Score calculation
+    - score accumulation approach
+    - score display
+    - score ranking or history
+    - best score for each level
+3. Player profile
+    - player name
+    - player level
+    - player score
+    - player history
+    - player ranking
+4. Game progress resumption
+    - save game progress
+    - load game progress
+    - delete game progress
+5. GUI 
+    - learn to use an advanced GUI library
+    - design a better GUI
+    - design a more user-friendly GUI
+    - design a more interactive GUI
+TODO:
+1. Chain special effect candy (currently, trigger one would replace all candies within range)
+2. Termination condition and display of game over
+3. Shuffle candies when no more valid moves

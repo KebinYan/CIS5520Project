@@ -24,6 +24,11 @@ candySpecial = bombCandy
 
 sampleBoard :: [[Candy]]
 sampleBoard = [[candy1, candy2, candy3], [candy4, candy5, candySpecial]]
+sampleGrid :: GameGrid
+sampleGrid = GameGrid{ 
+    board = [[candy1, candy2, candy3], [candy4, candy5, candySpecial], [candy3, candy2, candy1]]
+    , emptyCandyCoords = []
+    }
 
 testInitializeGrid :: Test
 testInitializeGrid = TestCase $ do
@@ -114,6 +119,63 @@ testSetCandyAt = TestCase $ do
     case getCandyAt sampleBoard (0,1) of
         Just candy -> assertEqual "Original board unchanged" candy2 candy
         Nothing -> assertFailure "Candy not found at (0,0)"
+testSetCandyAtBoundary :: Test
+testSetCandyAtBoundary = TestCase $ do
+    let updatedBoard = setCandyAt sampleBoard (-1, 0) stripedCrossCandy
+    assertEqual "Set candy at negative index should not change board" sampleBoard updatedBoard
+    let updatedBoard2 = setCandyAt sampleBoard (0, 100) stripedCrossCandy
+    assertEqual "Set candy at out-of-bounds index should not change board" sampleBoard updatedBoard2
+
+testGetCandyAtBoundary :: Test
+testGetCandyAtBoundary = TestCase $ do
+    let result = getCandyAt sampleBoard (-1, 0)
+    assertEqual "Get candy at negative index should return Nothing" Nothing result
+    let result2 = getCandyAt sampleBoard (0, 100)
+    assertEqual "Get candy at out-of-bounds index should return Nothing" Nothing result2
+
+testAddScoreAccumulation :: Test
+testAddScoreAccumulation = TestCase $ do
+    let initialState = GameState sampleGrid easy Nothing 50 0
+    finalState <- execStateT (addScore 50 >> addScore 150) initialState
+    assertEqual "Score after accumulation" 200 (score finalState)
+
+testCreateSpecialCandies :: Test
+testCreateSpecialCandies = TestCase $ do
+    let bomb = bombCandy
+    let stripedRow = stripedRowCandy 
+    let stripedCross = stripedCrossCandy
+    assertEqual "Bomb candy should have effect Bomb" Bomb (candyEffect bomb)
+    assertEqual "Striped row candy should have effect StripedRow" StripedRow (candyEffect stripedRow)
+    assertEqual "Striped cross candy should have effect StripedCross" StripedCross (candyEffect stripedCross)
+testSetGetSpecialCandy :: Test
+testSetGetSpecialCandy = TestCase $ do
+    let grid = GameGrid { board = sampleBoard, emptyCandyCoords = [] }
+        specialCandy = bombCandy
+        updatedBoard = setCandyAt (board grid) (1,1) specialCandy
+        retrievedCandy = getCandyAt updatedBoard (1,1)
+    case retrievedCandy of
+        Just candy -> assertEqual "Set and get special candy" specialCandy candy
+        Nothing -> assertFailure "Special candy not found at (1,1)"
+
+-- test corner cases
+testEmptyGridOperations :: Test
+testEmptyGridOperations = TestCase $ do
+    let emptyGrid = GameGrid { board = [], emptyCandyCoords = [] }
+        result = getCandyAt (board emptyGrid) (0,0)
+    assertEqual "Get candy from empty grid should return Nothing" Nothing result
+    let updatedBoard = setCandyAt (board emptyGrid) (0,0) candy1
+    assertEqual "Set candy on empty grid should not change the grid" [] updatedBoard
+testInvalidCoordinate :: Test
+testInvalidCoordinate = TestCase $ do
+    let grid = GameGrid { board = sampleBoard, emptyCandyCoords = [] }
+        invalidCoordinates = [(-1,-1), (100,100), (0,-1), (-1,0)]
+    mapM_ (\coord -> do
+        let result = getCandyAt (board grid) coord
+        assertEqual ("Get candy at invalid coordinate " ++ show coord) Nothing result
+        let updatedBoard = setCandyAt (board grid) coord candy1
+        assertEqual ("Set candy at invalid coordinate " ++ show coord) (board grid) updatedBoard
+        ) invalidCoordinates
+
 
 -- Arbitrary instance for Difficulty
 instance Arbitrary Difficulty where
@@ -138,6 +200,21 @@ instance Arbitrary GameGrid where
         difficulty <- arbitrary
         arbitraryGameGrid difficulty
 
+-- CandyShape Arbitrary instance
+instance Arbitrary CandyShape where
+    arbitrary = elements [Triangle, Circle, Square, Star, Heart, Diamond, Asterisk]
+
+-- CandyEffect Arbitrary instance
+instance Arbitrary CandyEffect where
+    arbitrary = elements [Normal, Bomb, StripedRow, StripedCross]
+
+-- Arbitrary instance for Candy
+instance Arbitrary Candy where
+    arbitrary :: Gen Candy
+    arbitrary = do
+        difficulty <- arbitrary
+        arbitraryCandy difficulty
+
 -- Generate an arbitrary GameGrid with a given difficulty
 arbitraryGameGrid :: Difficulty -> Gen GameGrid
 arbitraryGameGrid difficulty = do
@@ -147,13 +224,6 @@ arbitraryGameGrid difficulty = do
             board = splitIntoRows dim candies,
             emptyCandyCoords = []  -- Assume no empty candies for simplicity
         }
-
--- Arbitrary instance for Candy
-instance Arbitrary Candy where
-    arbitrary :: Gen Candy
-    arbitrary = do
-        difficulty <- arbitrary
-        arbitraryCandy difficulty
 
 arbitraryCandy :: Difficulty -> Gen Candy
 arbitraryCandy difficulty = do
@@ -205,6 +275,34 @@ prop_undoOnce initialState =
         nextState2 <- run $ execStateT undoStep nextState
         Test.QuickCheck.Monadic.assert $ nextState2 == nextState
 
+arbitraryCandyWithDifficulty :: Difficulty -> Gen Candy
+arbitraryCandyWithDifficulty difficulty = do
+    shape <- elements (candyShapes difficulty)
+    let effect = Normal
+    return Candy { candyShape = shape, candyEffect = effect }
+
+-- Property: Cloning a grid results in an equal but not identical grid
+prop_cloneGrid :: GameGrid -> Bool
+prop_cloneGrid grid =
+    let clonedGrid = cloneGrid grid
+    in grid == clonedGrid && board grid == board clonedGrid
+
+-- Property: Setting and then getting a candy at a valid coordinate retrieves the same candy
+prop_setGetCandyAt :: GameState -> Property
+prop_setGetCandyAt gameState =
+    let grid = currentGrid gameState
+        difficultyLevel = difficulty gameState
+        dimX = length (board grid)
+        dimY = length (head (board grid))
+    in not (null (board grid)) ==>
+        forAll (choose (0, dimX - 1)) $ \x ->
+        forAll (choose (0, dimY - 1)) $ \y ->
+        forAll (arbitraryCandyWithDifficulty difficultyLevel) $ \candy ->
+            let newBoard = setCandyAt (board grid) (x, y) candy
+                retrievedCandy = getCandyAt newBoard (x, y)
+            in retrievedCandy == Just candy
+
+-- Update the runUnitTests function
 runUnitTests :: IO Counts
 runUnitTests = runTestTT $
     TestList [
@@ -219,9 +317,17 @@ runUnitTests = runTestTT $
         TestLabel "testUndoable" testUndoable,
         TestLabel "testCloneGrid" testCloneGrid,
         TestLabel "testGetCandyAt" testGetCandyAt,
-        TestLabel "testSetCandyAt" testSetCandyAt
+        TestLabel "testSetCandyAt" testSetCandyAt,
+        TestLabel "testSetCandyAtBoundary" testSetCandyAtBoundary,
+        TestLabel "testGetCandyAtBoundary" testGetCandyAtBoundary,
+        TestLabel "testAddScoreAccumulation" testAddScoreAccumulation,
+        TestLabel "testCreateSpecialCandies" testCreateSpecialCandies,
+        TestLabel "testSetGetSpecialCandy" testSetGetSpecialCandy,
+        TestLabel "testEmptyGridOperations" testEmptyGridOperations,
+        TestLabel "testInvalidCoordinate" testInvalidCoordinate
     ]
 
+-- Update the runQuickCheckTests function
 runQuickCheckTests :: IO ()
 runQuickCheckTests = do
     quickCheck (prop_gridDimensionsMatch easy)
@@ -237,3 +343,12 @@ runQuickCheckTests = do
     quickCheck prop_updateUndo
     putStrLn "prop_undoOnce:"
     quickCheck prop_undoOnce
+    putStrLn "prop_cloneGrid:"
+    quickCheck prop_cloneGrid
+    putStrLn "prop_setGetCandyAt:"
+    quickCheck prop_setGetCandyAt
+
+main :: IO ()
+main = do
+    runUnitTests >>= print
+    runQuickCheckTests

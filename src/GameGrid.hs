@@ -148,3 +148,4 @@ setCandyAt board (x, y) newCandy
             newRow = left ++ [newCandy] ++ right
             newBoard = before ++ [newRow] ++ after
         in newBoard
+
