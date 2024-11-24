@@ -76,7 +76,7 @@ gameStep state = do
             case action of
                 Quit -> putStrLn "Quitting game"
                 _ -> do
-                    updatedState <- handleAction state action
+                    updatedState <- handleAction True state action
                     stableState <- fillAndCrushStateIO updatedState
                     printGridState stableState
                     gameStep stableState
@@ -97,29 +97,31 @@ actionParser = wsP $ choice
     , string "quit" *> pure Quit
     ]
 
-handleAction :: GameState -> Action -> IO  GameState
-handleAction state action = case action of
+handleAction :: Bool -> GameState -> Action -> IO GameState
+handleAction verbose state action = case action of
     Swap (x1, y1) (x2, y2) -> do
-        putStrLn $
-            "Swapping (" ++ show x1 ++ "," ++ show y1 ++ ") with ("
-            ++ show x2 ++ "," ++ show y2 ++ ")"
+        when verbose $
+            putStrLn $
+                "Swapping (" ++ show x1 ++ "," ++ show y1 ++ ") with ("
+                ++ show x2 ++ "," ++ show y2 ++ ")"
         let newGrid = applySwap (currentGrid state) (x1, y1) (x2, y2)
         (_, newState) <- runStateT (updateGridState newGrid) state
-        printGrid newGrid
+        when verbose $ printGrid newGrid
         return newState
     Click (x, y) -> do
-        putStrLn $ "Clicking on (" ++ show x ++ "," ++ show y ++ ")"
+        when verbose $
+            putStrLn $ "Clicking on (" ++ show x ++ "," ++ show y ++ ")"
         let newGrid = applyClick (currentGrid state) (x, y)
         (_, newState) <- runStateT (updateGridState newGrid) state
-        printGrid newGrid
+        when verbose $ printGrid newGrid
         return newState
     Undo -> do
-        putStrLn "Undoing last action"
+        when verbose $ putStrLn "Undoing last action"
         (_, newState) <- runStateT undoStep state
-        printGrid (currentGrid state)
+        when verbose $ printGrid (currentGrid state)
         return newState
     _ -> do
-        putStrLn "Invalid action"
+        when verbose $ putStrLn "Invalid action"
         return state
 
 applyAction :: GameGrid -> Action -> GameGrid
