@@ -513,8 +513,9 @@ prop_fillAndCrushUntilStable :: Difficulty -> Property
 prop_fillAndCrushUntilStable difficulty = monadicIO $ do
     grid <- run $ generate $ genArbGrid difficulty
     stableGrid <- run $ fillAndCrushUntilStable grid (candyShapes difficulty)
-    let crushables = findAllCrushables stableGrid
-    Test.QuickCheck.Monadic.assert $ null crushables
+    -- there should be no immediate crushables in the stable grid
+    let crushAgain = autoCrush stableGrid
+    Test.QuickCheck.Monadic.assert $ null crushAgain
 
 -- Unit tests
 runUnitTests :: IO Counts
