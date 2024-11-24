@@ -37,12 +37,12 @@ constructDisappear = Disappear . sortCoordinates
 -- define the precedence of actions
 instance Ord Action where
     compare :: Action -> Action -> Ordering
-    compare Quit _ = GT
-    compare Undo _ = GT
-    compare (Swap _ _) _ = GT
-    compare (Click _) _ = GT
-    compare (Disappear _) _ = GT
-    compare (Trigger _) _ = GT
+    compare Quit _ = LT
+    compare Undo _ = LT
+    compare (Swap _ _) _ = LT
+    compare (Click _) _ = LT
+    compare (Disappear _) _ = LT
+    compare (Trigger _) _ = LT
 
 -- Define action result
 data ActionResult = ActionResult {
@@ -195,17 +195,17 @@ findNormalCandyCrushables grid coord =
         in case addIfMatch step1 grid candy visited of
             -- first step doesn't match, stop exploration in this direction
             Nothing -> visited
-            Just visited1 -> fromMaybe visited1 
+            Just visited1 -> fromMaybe visited1
                 (addIfMatch step2 grid candy visited1)
 
     -- check if a single step matches the given candy
-    addIfMatch :: Coordinate -> GameGrid -> Candy -> 
+    addIfMatch :: Coordinate -> GameGrid -> Candy ->
         Set.Set Coordinate -> Maybe (Set.Set Coordinate)
     addIfMatch coord grid candy visited
         | Set.member coord visited = Nothing
         | otherwise =
             case getCandyAt (board grid) coord of
-                Just c | c == candy -> 
+                Just c | c == candy ->
                     Just (Set.insert coord visited)  -- match found
                 _ -> Nothing  -- no match
 
@@ -230,24 +230,24 @@ applyDisappear (GameGrid grid emptyCandyCoords) coords =
         Nothing -> GameGrid clearGrid emptyCandyCoords
 
 applyTrigger :: GameGrid -> Coordinate -> CandyEffect -> GameGrid
-applyTrigger (GameGrid grid emptyCandyCoords) (x, y) StripedRow = 
+applyTrigger (GameGrid grid emptyCandyCoords) (x, y) StripedRow =
     GameGrid (clearRow x grid) emptyCandyCoords
-applyTrigger (GameGrid grid emptyCandyCoords) (x, y) StripedCross = 
+applyTrigger (GameGrid grid emptyCandyCoords) (x, y) StripedCross =
     GameGrid (clearColumn y (clearRow x grid)) emptyCandyCoords
-applyTrigger (GameGrid grid emptyCandyCoords) (x, y) Bomb = 
+applyTrigger (GameGrid grid emptyCandyCoords) (x, y) Bomb =
     GameGrid (clearSurrounding grid (x, y)) emptyCandyCoords
 applyTrigger grid _ _ = grid
 
 -- Clear a row of candies
 clearRow :: Int -> [[Candy]] -> [[Candy]]
 clearRow x grid =
-    [if rowIdx == x then replicate (length row) emptyCandy else row 
+    [if rowIdx == x then replicate (length row) emptyCandy else row
         | (rowIdx, row) <- zip [0..] grid]
 
 -- Clear a column of candies
 clearColumn :: Int -> [[Candy]] -> [[Candy]]
 clearColumn y grid =
-    [ [if colIdx == y then emptyCandy else candy 
+    [ [if colIdx == y then emptyCandy else candy
         | (colIdx, candy) <- zip [0..] row] | row <- grid ]
 
 -- Clear candies in a 3x3 grid around a given coordinate
@@ -292,7 +292,7 @@ fillAndCrushUntilStable grid shapes = do
     -- Auto-crush the grid if there are crushables
     case autoCrush filledGrid of
         -- No crushables left; return the stable grid
-        Nothing -> return filledGrid  
+        Nothing -> return filledGrid
         Just crushedGrid ->
             fillAndCrushUntilStable crushedGrid shapes  -- Continue until stable
 
@@ -331,7 +331,7 @@ autoCrush board =
 -- Helper function to filter out actions involving special candies
 isNormalDisappear :: GameGrid -> Action -> Bool
 isNormalDisappear grid (Disappear coords) =
-    all (\coord -> maybe True (isNormal . candyEffect) (getCandyAt (board grid) coord)) coords
+    all (maybe True (isNormal . candyEffect) . getCandyAt (board grid)) coords
   where
     isNormal Normal = True
     isNormal _ = False
@@ -339,12 +339,21 @@ isNormalDisappear _ _ = False
 
 -- Find all crushable candies in the board
 findAllCrushables :: GameGrid -> [Action]
-findAllCrushables board =
-    concatMap (\coord -> findNormalCandyCrushables board coord) (allCoordinates board)
+findAllCrushables board = go (allCoordinates board) Set.empty []
+  where
+    go :: [Coordinate] -> Set.Set Coordinate -> [Action] -> [Action]
+    go [] _ results = results
+    go (coord:coords) visited results
+        | coord `Set.member` visited = go coords visited results
+        | otherwise =
+            let actions = findNormalCandyCrushables board coord
+                newVisited = foldl (\acc (Disappear coords) -> 
+                    acc `Set.union` Set.fromList coords) visited actions
+            in go coords newVisited (results ++ actions)
 
 -- Apply a list of actions to the board
 applyActions :: GameGrid -> [Action] -> GameGrid
-applyActions board actions = foldl applyAction board actions
+applyActions = foldl applyAction
 
 -- List all coordinates in the board
 allCoordinates :: GameGrid -> [Coordinate]
