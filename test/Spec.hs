@@ -29,4 +29,4 @@ main = do
     putStrLn "Running GameUtil tests:"
     GameUtilsTest.runQuickCheckTests
     putStrLn "Running GameController tests:"
-    -- GameControllerTest.runQuickCheckTests
+    GameControllerTest.runQuickCheckTests
