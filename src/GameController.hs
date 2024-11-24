@@ -161,6 +161,7 @@ findCrushables grid = concatMap (processCoord grid)
             let candy = getCandyAt (board g) coord
             in case candy of
                 Nothing -> []
+                Just EmptyCandy -> []
                 Just c -> case candyEffect c of
                     Normal -> findNormalCandyCrushables g coord
                     _ -> [Trigger (coord, candyEffect c)]
@@ -216,6 +217,7 @@ applyClick g coord
         let candy = getCandyAt (board g) coord
         in case candy of
             Nothing -> g
+            Just EmptyCandy -> g
             Just c -> applyTrigger g coord (candyEffect c)
 
 applyDisappear :: GameGrid -> [Coordinate] -> GameGrid

@@ -1,5 +1,5 @@
 module GameControllerTest where
-import Test.QuickCheck 
+import Test.QuickCheck
 import Test.QuickCheck.Monadic
 import Test.HUnit
 
@@ -400,7 +400,10 @@ testAutoCrushRelated = TestList [
     TestLabel "applyActions" testApplyActions,
     TestLabel "autoCrush" testAutoCrush
   ]
+
+-- QuickCheck properties
 instance Arbitrary Candy where
+    arbitrary :: Gen Candy
     arbitrary = oneof [Candy <$> arbitrary <*> arbitrary, pure EmptyCandy]
 
 instance Arbitrary CandyShape where
@@ -409,59 +412,109 @@ instance Arbitrary CandyShape where
 instance Arbitrary CandyEffect where
     arbitrary = elements [Normal .. StripedCross]
 
-instance Arbitrary GameGrid where
+instance Arbitrary Difficulty where
+    arbitrary :: Gen Difficulty
+    arbitrary = elements [easy, medium, hard]
+
+instance Arbitrary Coordinate where
+    arbitrary :: Gen Coordinate
     arbitrary = do
-        dim <- chooseInt (3, 9)
+        difficulty <- arbitrary
+        let dim = dimension difficulty
+        x <- chooseInt (0, dim - 1)
+        y <- chooseInt (0, dim - 1)
+        return (x, y)
+    shrink :: Coordinate -> [Coordinate]
+    shrink (x, y) = [(x', y') | x' <- shrink x, y' <- shrink y]
+
+genArbCoord :: Difficulty -> Gen Coordinate
+genArbCoord difficulty = do
+    let dim = dimension difficulty
+    x <- chooseInt (0, dim - 1)
+    y <- chooseInt (0, dim - 1)
+    return (x, y)
+
+instance Arbitrary GameGrid where
+    arbitrary :: Gen GameGrid
+    arbitrary = do
+        difficulty <- arbitrary
+        let dim = dimension difficulty
         candies <- vectorOf (dim * dim) arbitrary
         let board = splitIntoRows dim candies
         return $ GameGrid board []
 
+genArbGrid :: Difficulty -> Gen GameGrid
+genArbGrid difficulty = do
+    let dim = dimension difficulty
+    candies <- vectorOf (dim * dim) arbitrary
+    let board = splitIntoRows dim candies
+    return $ GameGrid board []
+
 instance Arbitrary Action where
-    arbitrary = oneof [
-        Swap <$> arbitrary <*> arbitrary,
-        Click <$> arbitrary,
-        pure Undo,
-        pure Quit,
-        Trigger <$> arbitrary,
-        Disappear <$> listOf arbitrary
+    arbitrary :: Gen Action
+    arbitrary = do
+        difficulty <- arbitrary
+        oneof 
+            [ Swap <$> genArbCoord difficulty <*> genArbCoord difficulty
+            , Click <$> genArbCoord difficulty
+            , pure Undo
+            , pure Quit
+            , Trigger <$> ((,) <$> genArbCoord difficulty <*> arbitrary)
+            , Disappear <$> listOf (genArbCoord difficulty)
+            ]
+
+genArbAction :: Difficulty -> Gen Action
+genArbAction difficulty = do
+    oneof 
+        [ Swap <$> genArbCoord difficulty <*> genArbCoord difficulty
+        , Click <$> genArbCoord difficulty
+        , pure Undo
+        , pure Quit
+        , Trigger <$> ((,) <$> genArbCoord difficulty <*> arbitrary)
+        , Disappear <$> listOf (genArbCoord difficulty)
         ]
+
 -- Property: Swapping candies twice results in the original grid
-prop_swapCandiesIdempotent :: GameGrid -> Coordinate -> Coordinate -> Property
-prop_swapCandiesIdempotent grid coord1 coord2 =
-    validCoords ==> 
+prop_swapCandiesIdempotent :: Difficulty -> Property
+prop_swapCandiesIdempotent difficulty = monadicIO $ do
+    coord1 <- run $ generate $ genArbCoord difficulty
+    coord2 <- run $ generate $ genArbCoord difficulty
+    grid <- run $ generate $ genArbGrid difficulty
     let swappedOnce = swapCandies grid coord1 coord2
-        swappedTwice = swapCandies swappedOnce coord1 coord2
-    in swappedTwice == grid
-  where
-    validCoords = validCoordinate grid coord1 && validCoordinate grid coord2
-                  && coord1 /= coord2
+    let swappedTwice = swapCandies swappedOnce coord1 coord2
+    return $ swappedTwice == grid
 
 -- Property: Applying an action preserves the grid size
-prop_applyActionPreservesGridSize :: GameGrid -> Action -> Bool
-prop_applyActionPreservesGridSize grid action =
+prop_applyActionPreservesGridSize :: Difficulty -> Property
+prop_applyActionPreservesGridSize difficulty = monadicIO $ do
+    grid <- run $ generate $ genArbGrid difficulty
+    action <- run $ generate $ genArbAction difficulty
     let newGrid = applyAction grid action
-    in length (board grid) == length (board newGrid) &&
-       all (\(row1, row2) -> length row1 == length row2) (zip (board grid) (board newGrid))
+    return $ length (board grid) == length (board newGrid) &&
+             all (\(row1, row2) -> length row1 == length row2) 
+                (zip (board grid) (board newGrid))
 
--- Property: all candies in a crushable group are the same
-prop_findNormalCandyCrushablesMatch :: GameGrid -> Coordinate -> Property
-prop_findNormalCandyCrushablesMatch grid coord =
-    validCoordinate grid coord ==> 
+-- -- Property: all candies in a crushable group are the same
+prop_findNormalCandyCrushablesMatch :: Difficulty -> Property
+prop_findNormalCandyCrushablesMatch difficulty = monadicIO $ do
+    coord <- run $ generate $ genArbCoord difficulty
+    grid <- run $ generate $ genArbGrid difficulty
     let crushables = findNormalCandyCrushables grid coord
-    in all (allSameCandy grid) crushables
-  where
-    allSameCandy g (Disappear coords) =
-        let candies = map (getCandyAt (board g)) coords
-        in all (== head candies) (tail candies)
-    allSameCandy _ _ = True
+    return $ all (allSameCandy grid) crushables
+    where
+        allSameCandy :: GameGrid -> Action -> Bool
+        allSameCandy grid (Disappear coords) =
+            let candies = map (\(x, y) -> (board grid !! x) !! y) coords
+            in all (== head candies) candies
+        allSameCandy _ _ = False
 
--- Property: fillAndCrushUntilStable should return a stable grid with no immediate crushables
-prop_fillAndCrushUntilStable :: GameGrid -> [CandyShape] -> Property
-prop_fillAndCrushUntilStable grid shapes =
-    not (null (board grid)) ==> monadicIO $ do
-        stableGrid <- run $ fillAndCrushUntilStable grid shapes
-        let crushables = findAllCrushables stableGrid
-        Test.QuickCheck.Monadic.assert $ null crushables
+-- -- Property: fillAndCrushUntilStable should return a stable grid with no immediate crushables
+prop_fillAndCrushUntilStable :: Difficulty -> Property
+prop_fillAndCrushUntilStable difficulty = monadicIO $ do
+    grid <- run $ generate $ genArbGrid difficulty
+    stableGrid <- run $ fillAndCrushUntilStable grid (candyShapes difficulty)
+    let crushables = findAllCrushables stableGrid
+    Test.QuickCheck.Monadic.assert $ null crushables
 
 -- Unit tests
 runUnitTests :: IO Counts
@@ -477,3 +530,15 @@ runUnitTests = runTestTT $ TestList
         TestLabel "testFill" testFill,
         TestLabel "testAutoCrushRelated" testAutoCrushRelated
     ]
+
+-- QuickCheck tests
+runQuickCheckTests :: IO ()
+runQuickCheckTests = do
+    putStrLn "prop_swapCandiesIdempotent:"
+    quickCheck prop_swapCandiesIdempotent
+    putStrLn "prop_applyActionPreservesGridSize:"
+    quickCheck prop_applyActionPreservesGridSize
+    putStrLn "prop_findNormalCandyCrushablesMatch:"
+    quickCheck prop_findNormalCandyCrushablesMatch
+    putStrLn "prop_fillAndCrushUntilStable:"
+    quickCheck prop_fillAndCrushUntilStable

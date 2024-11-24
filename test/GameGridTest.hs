@@ -330,6 +330,7 @@ runUnitTests = runTestTT $
 -- Update the runQuickCheckTests function
 runQuickCheckTests :: IO ()
 runQuickCheckTests = do
+    putStrLn "prop_gridDimensionsMatch:"
     quickCheck (prop_gridDimensionsMatch easy)
     quickCheck (prop_gridDimensionsMatch medium)
     quickCheck (prop_gridDimensionsMatch hard)
