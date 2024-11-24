@@ -58,6 +58,12 @@ testConstructActionResult = TestCase $ do
         expectedActions = [Quit, Click (2, 1), Disappear [(0, 0), (0, 1), (0, 2)], Trigger ((2, 2), Bomb)]
     assertEqual "ActionResults should be equal" expectedActions (actions actionResults)
 
+testConstructors :: Test
+testConstructors = TestList [
+    TestLabel "constructDisappear" testConstructDisappear,
+    TestLabel "constructActionResult" testConstructActionResult
+  ]
+
 -- Test Action Parser
 testParseAction :: Test
 testParseAction = TestList [
@@ -70,9 +76,10 @@ testParseAction = TestList [
     "Parse quit action" ~:
         parseAction "quit" ~?= Right Quit,
     "Parse invalid action" ~:
-        parseAction "invalid" ~?= Left "Invalid action"
+        parseAction "invalid" ~?= Left "No parses"
   ]
 
+-- Test helper functions for swap action
 testSwapCandies :: Test
 testSwapCandies = TestCase $ do
     let grid = swapCandies initialGrid (0, 0) (1, 0)
@@ -115,6 +122,73 @@ testFindCrushables2 = TestCase $ do
     let expectedCrushables = []
     assertEqual "Crushables should be equal" expectedCrushables crushables
 
+testSwapHelpers :: Test
+testSwapHelpers = TestList [
+    TestLabel "swapCandies" testSwapCandies,
+    TestLabel "findNormalCandyCrushables1" testFindNormalCandyCrushables1,
+    TestLabel "findNormalCandyCrushables2" testFindNormalCandyCrushables2,
+    TestLabel "findNormalCandyCrushables3" testFindNormalCandyCrushables3,
+    TestLabel "findCrushables1" testFindCrushables1,
+    TestLabel "findCrushables2" testFindCrushables2
+  ]
+
+-- Test helper functions for crush action
+testClearRow :: Test
+testClearRow = TestCase $ do
+    let grid = clearRow 0 (board initialGrid)
+    let expectedBoard = 
+            [ [EmptyCandy, EmptyCandy, EmptyCandy]
+            , [candy4, candy1, candy2]
+            , [candy3, candy5, candy4]
+            ]
+    assertEqual "Grids should be equal" expectedBoard grid
+
+testClearColumn :: Test
+testClearColumn = TestCase $ do
+    let grid = clearColumn 0 (board crushableGrid)
+    let expectedBoard = 
+            [ [EmptyCandy, candy1, candy1]
+            , [EmptyCandy, candy2, candy2]
+            , [EmptyCandy, candy1, bombCandy]
+            ]
+    assertEqual "Grids should be equal" expectedBoard grid
+
+testClearSurrounding :: Test
+testClearSurrounding = TestCase $ do
+    let grid = clearSurrounding (board crushableGrid) (2, 2)
+    let expectedBoard = 
+            [ [candy1, candy1, candy1]
+            , [candy2, EmptyCandy, EmptyCandy]
+            , [candy2, EmptyCandy, EmptyCandy]
+            ]
+    assertEqual "Grids should be equal" expectedBoard grid
+
+testClearPosition :: Test
+testClearPosition = TestCase $ do
+    let grid = clearPosition (board crushableGrid) (1, 1)
+    let expectedBoard = 
+            [ [candy1, candy1, candy1]
+            , [candy2, EmptyCandy, candy2]
+            , [candy2, candy1, bombCandy]
+            ]
+    assertEqual "Grids should be equal" expectedBoard grid
+
+testValidCoordinate :: Test
+testValidCoordinate = TestCase $ do
+    assertBool "Valid coordinate" (validCoordinate initialGrid (0, 0))
+    assertBool "Invalid coordinate" (not $ validCoordinate initialGrid (3, 0))
+    assertBool "Invalid coordinate" (not $ validCoordinate initialGrid (0, -1))
+
+testCrushHelpers :: Test
+testCrushHelpers = TestList [
+    TestLabel "clearRow" testClearRow,
+    TestLabel "clearColumn" testClearColumn,
+    TestLabel "clearSurrounding" testClearSurrounding,
+    TestLabel "clearPosition" testClearPosition,
+    TestLabel "validCoordinate" testValidCoordinate
+  ]
+
+-- Test helper functions for apply action
 testApplyDisappear :: Test
 testApplyDisappear = TestCase $ do
     let grid = applyDisappear crushableGrid [(0, 0), (0, 1), (0, 2)]
@@ -164,6 +238,16 @@ testApplyClick2 :: Test
 testApplyClick2 = TestCase $ do
     let grid = applyClick crushableGrid (0, 0)
     assertEqual "Grids should be equal" crushableGrid grid
+
+testActions :: Test
+testActions = TestList [
+    TestLabel "applyDisappear" testApplyDisappear,
+    TestLabel "applyTrigger" testApplyTrigger,
+    TestLabel "applySwapNoCrush" testSwapNoCrush,
+    TestLabel "applySwapCrush" testSwapCrush,
+    TestLabel "applyClick1" testApplyClick1,
+    TestLabel "applyClick2" testApplyClick2
+  ]
 
 -- Test applyAction input
 testApplyAction1 :: Test
@@ -216,6 +300,16 @@ testApplyAction6 = TestCase $ do
             ] []
     assertEqual "Grids should be equal" expectedCrushedGrid grid
 
+testApplyAction :: Test
+testApplyAction = TestList [
+    TestLabel "applyAction1" testApplyAction1,
+    TestLabel "applyAction2" testApplyAction2,
+    TestLabel "applyAction3" testApplyAction3,
+    TestLabel "applyAction4" testApplyAction4,
+    TestLabel "applyAction5" testApplyAction5,
+    TestLabel "applyAction6" testApplyAction6
+  ]
+
 testRedeemSpecialCandy :: Test
 testRedeemSpecialCandy = TestList [
     "Create a striped row candy with 4 candies" ~:
@@ -228,37 +322,95 @@ testRedeemSpecialCandy = TestList [
         redeemSpecialCandy (Disappear [(0, 0), (0, 1), (0, 2)]) ~?= Nothing
   ]
 
+-- Test fill empty cells with random candies
+testFillRow :: Test
+testFillRow = TestCase $ do
+    let row = [candy1, candy2, EmptyCandy]
+    newRow <- fillRow row [Circle , Square, Triangle, Heart]
+    assertBool "No empty candies" (EmptyCandy `notElem` newRow)
+
 testFillBoard :: Test
 testFillBoard = TestCase $ do
     newBoard <- fillBoard (board gridWithEmptyCandy) [Circle, Square, Triangle, Heart, Star]
     assertBool "No empty candies" (EmptyCandy `notElem` concat newBoard)
 
+testFill :: Test
+testFill = TestList [
+    TestLabel "fillRow" testFillRow,
+    TestLabel "fillBoard" testFillBoard
+  ]
+
+-- Test autoCrush related functions
+testIsNormalDisappear :: Test
+testIsNormalDisappear = TestCase $ do
+    assertBool "Normal disappear" 
+        (isNormalDisappear crushableGrid (Disappear [(0, 0), (0, 1), (0, 2)]))
+    assertBool "Not normal disappear" 
+        (not $ isNormalDisappear crushableGrid (Disappear [(2, 0), (2, 1), (2, 2)]))
+    assertBool "Not normal disappear" 
+        (not $ isNormalDisappear crushableGrid (Trigger ((2, 2), Bomb)))
+
+testAllCoordinates :: Test
+testAllCoordinates = TestCase $ do
+    let coords = allCoordinates crushableGrid
+    let expectedCoords = 
+            [(0, 0), (0, 1), (0, 2), 
+            (1, 0), (1, 1), (1, 2), 
+            (2, 0), (2, 1), (2, 2)]
+    assertEqual "Coordinates should be equal" expectedCoords coords
+
+expectedCrushables :: [Action]
+expectedCrushables
+    = [Disappear [(0, 0), (0, 1), (0, 2)],
+       Disappear [(1, 0), (1, 1), (1, 2), (2, 0)]]
+
+testFinalAllCrushables :: Test
+testFinalAllCrushables = TestCase $ do
+    let allCrushables = findAllCrushables crushableGrid
+    assertEqual "Crushables should be equal" expectedCrushables allCrushables
+
+testApplyActions :: Test
+testApplyActions = TestCase $ do
+    let grid = applyActions crushableGrid expectedCrushables
+    let expectedCrushedGrid = GameGrid
+            [ [EmptyCandy, EmptyCandy, EmptyCandy]
+            , [EmptyCandy, EmptyCandy, stripedRowCandy]
+            , [EmptyCandy, candy1, bombCandy]
+            ] []
+    assertEqual "Grids should be equal" expectedCrushedGrid grid
+
+testAutoCrush :: Test
+testAutoCrush = TestCase $ do
+    let maybeGrid = autoCrush crushableGrid
+    let expectedCrushedGrid = GameGrid
+            [ [EmptyCandy, EmptyCandy, EmptyCandy]
+            , [EmptyCandy, EmptyCandy, stripedRowCandy]
+            , [EmptyCandy, candy1, bombCandy]
+            ] []
+    case maybeGrid of
+        Just grid -> assertEqual "Grids should be equal" expectedCrushedGrid grid
+        Nothing -> assertFailure "autoCrush returned Nothing"
+
+testAutoCrushRelated :: Test
+testAutoCrushRelated = TestList [
+    TestLabel "isNormalDisappear" testIsNormalDisappear,
+    TestLabel "allCoordinates" testAllCoordinates,
+    TestLabel "finalAllCrushables" testFinalAllCrushables,
+    TestLabel "applyActions" testApplyActions,
+    TestLabel "autoCrush" testAutoCrush
+  ]
 
 -- Unit tests
-tests :: Test
-tests = TestList
+runUnitTests :: IO Counts
+runUnitTests = runTestTT $ TestList
     [
+        TestLabel "testConstructors" testConstructors,
         TestLabel "testParseAction" testParseAction,
-        TestLabel "testSwapCandies" testSwapCandies,
-        TestLabel "testFindNormalCandyCrushables1" testFindNormalCandyCrushables1,
-        TestLabel "testFindNormalCandyCrushables2" testFindNormalCandyCrushables2,
-        TestLabel "testFindNormalCandyCrushables3" testFindNormalCandyCrushables3,
-        TestLabel "testFindCrushables1" testFindCrushables1,
-        TestLabel "testFindCrushables2" testFindCrushables2,
-        TestLabel "testApplyDisappear" testApplyDisappear,
-        TestLabel "testApplyTrigger" testApplyTrigger,
-        TestLabel "testSwapNoCrush" testSwapNoCrush,
-        TestLabel "testSwapCrush" testSwapCrush,
-        TestLabel "testApplyClick1" testApplyClick1,
-        TestLabel "testApplyClick2" testApplyClick2,
-        TestLabel "testApplyAction1" testApplyAction1,
-        TestLabel "testApplyAction2" testApplyAction2,
-        TestLabel "testApplyAction3" testApplyAction3,
-        TestLabel "testApplyAction4" testApplyAction4,
-        TestLabel "testApplyAction5" testApplyAction5,
-        TestLabel "testApplyAction6" testApplyAction6
+        TestLabel "testSwapHelpers" testSwapHelpers,
+        TestLabel "testCrushHelpers" testCrushHelpers,
+        TestLabel "testActions" testActions,
+        TestLabel "testApplyAction" testApplyAction,
+        TestLabel "testRedeemSpecialCandy" testRedeemSpecialCandy,
+        TestLabel "testFill" testFill,
+        TestLabel "testAutoCrushRelated" testAutoCrushRelated
     ]
-
--- Run the tests
-main :: IO Counts
-main = runTestTT tests

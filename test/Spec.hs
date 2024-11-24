@@ -5,6 +5,7 @@ import Lib
 import qualified CandyTest
 import qualified GameGridTest
 import qualified GameUtilsTest
+import qualified GameControllerTest
 
 
 main :: IO ()
@@ -18,6 +19,7 @@ main = do
     putStrLn "Running GameUtil tests:"
     GameUtilsTest.runUnitTests
     putStrLn "Running GameController tests:"
+    GameControllerTest.runUnitTests
     -- GameGridTest.runUnitTests
     putStrLn "Running QuickCheck tests..."
     putStrLn "Running Candy tests:"
@@ -26,3 +28,5 @@ main = do
     GameGridTest.runQuickCheckTests
     putStrLn "Running GameUtil tests:"
     GameUtilsTest.runQuickCheckTests
+    putStrLn "Running GameController tests:"
+    -- GameControllerTest.runQuickCheckTests
