@@ -504,6 +504,14 @@ genArbUserAction difficulty = do
         , pure Quit
         ]
 
+-- All possible moves
+genReversibleActions :: Difficulty -> Gen Action
+genReversibleActions difficulty = do
+    oneof 
+        [ Swap <$> genArbCoord difficulty <*> genArbCoord difficulty
+        , Click <$> genArbCoord difficulty
+        ]
+
 -- Property: Swapping candies twice results in the original grid
 prop_swapCandiesIdempotent :: Difficulty -> Property
 prop_swapCandiesIdempotent difficulty = monadicIO $ do
@@ -543,8 +551,16 @@ prop_fillAndCrushUntilStable :: Difficulty -> Property
 prop_fillAndCrushUntilStable difficulty = monadicIO $ do
     grid <- run $ generate $ genArbGrid difficulty
     stableGrid <- run $ fillAndCrushUntilStable grid (candyShapes difficulty)
-    let crushables = findAllCrushables stableGrid
-    Test.QuickCheck.Monadic.assert $ null crushables
+    -- there should be no immediate crushables in the stable grid
+    let crushAgain = autoCrush stableGrid
+    Test.QuickCheck.Monadic.assert $ null crushAgain
+
+-- Property: fillAndCrushUntilStable should return a stable grid with empty emptyCandyCoords
+prop_fillAndCrushUntilStableEmptyCoords :: Difficulty -> Property
+prop_fillAndCrushUntilStableEmptyCoords difficulty = monadicIO $ do
+    grid <- run $ generate $ genArbGrid difficulty
+    stableGrid <- run $ fillAndCrushUntilStable grid (candyShapes difficulty)
+    Test.QuickCheck.Monadic.assert $ null (emptyCandyCoords stableGrid)
 
 -- Property: Applying an action modifies step size correctly
 prop_actionStepSize :: Difficulty -> Property
@@ -556,20 +572,29 @@ prop_actionStepSize difficulty = monadicIO $ do
     let newStepSize = remainingSteps newState
     case initalAction of
         Undo ->
-            Test.QuickCheck.Monadic.assert $
-                newStepSize <= initalStepSize + 1
+            case lastGrid initalState of
+                Just _ -> 
+                    Test.QuickCheck.Monadic.assert $
+                        newStepSize == initalStepSize + 1
+                -- already undoed once or initial state: no last grid to restore
+                Nothing ->
+                    Test.QuickCheck.Monadic.assert $
+                        newStepSize == initalStepSize
         Quit ->
-            Test.QuickCheck.Monadic.assert $
-                newStepSize == initalStepSize
-        Trigger _ ->
-            Test.QuickCheck.Monadic.assert $
-                newStepSize == initalStepSize
-        Disappear _ ->
             Test.QuickCheck.Monadic.assert $
                 newStepSize == initalStepSize
         _ ->
             Test.QuickCheck.Monadic.assert $
                 newStepSize == initalStepSize - 1
+
+-- Property: undoing an action restores the grid to the previous state
+prop_undoRestoresGrid :: Difficulty -> Property
+prop_undoRestoresGrid difficulty = monadicIO $ do
+    initialState <- run $ generate $ genArbState difficulty
+    action <- run $ generate $ genReversibleActions difficulty
+    newState <- run $ handleAction False initialState action
+    undoState <- run $ handleAction False newState Undo
+    return $ currentGrid initialState == currentGrid undoState
 
 -- Unit tests
 runUnitTests :: IO Counts
@@ -597,8 +622,12 @@ runQuickCheckTests = do
     quickCheck prop_findNormalCandyCrushablesMatch
     putStrLn "prop_fillAndCrushUntilStable:"
     quickCheck prop_fillAndCrushUntilStable
+    putStrLn "prop_fillAndCrushUntilStableEmptyCoords:"
+    quickCheck prop_fillAndCrushUntilStableEmptyCoords
     putStrLn "prop_actionStepSize:"
     quickCheck prop_actionStepSize
+    putStrLn "prop_undoRestoresGrid:"
+    quickCheck prop_undoRestoresGrid
 
 main :: IO ()
 main = do
