@@ -5,7 +5,7 @@ Q:
 3. head given that the container is not empty
 4. deductions for project complexity, is it complex enough?
 5. More efficient way of providing hints other than simulation algorithm
-
+6. If a child node is updated, would the entire tree be replaced or just the subtree rooted at the child node?
 
 Ideas:
 1. Provide hints  
