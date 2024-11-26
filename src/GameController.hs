@@ -55,9 +55,9 @@ constructActionResult :: GameGrid -> [Action] -> ActionResult
 constructActionResult g actions = ActionResult g (sort actions)
 
 -- The main game loop
-gameLoop :: Difficulty -> IO ()
-gameLoop d = do
-    initialState <- initializeGameState d
+gameLoop :: Difficulty -> [Candy] -> IO ()
+gameLoop d candys = do
+    initialState <- initializeGameState d candys
     state <- fillAndCrushStateIO initialState
     printGridState state
     gameStep state
@@ -165,7 +165,7 @@ findCrushables grid = concatMap (processCoord grid)
                 Nothing -> []
                 Just EmptyCandy -> []
                 Just c -> case candyEffect c of
-                    Normal -> findNormalCandyCrushables g coord
+                    "Normal" -> findNormalCandyCrushables g coord
                     _ -> [Trigger (coord, candyEffect c)]
 
 -- Find all normal candies that can be crushed starting from a given coordinate
@@ -241,35 +241,6 @@ applyTrigger (GameGrid grid emptyCandyCoords) (x, y) StripedCross =
 applyTrigger (GameGrid grid emptyCandyCoords) (x, y) Bomb =
     GameGrid (clearSurrounding grid (x, y)) emptyCandyCoords
 applyTrigger grid _ _ = grid
-
--- Clear a row of candies
-clearRow :: Int -> [[Candy]] -> [[Candy]]
-clearRow x grid =
-    [if rowIdx == x then replicate (length row) emptyCandy else row
-        | (rowIdx, row) <- zip [0..] grid]
-
--- Clear a column of candies
-clearColumn :: Int -> [[Candy]] -> [[Candy]]
-clearColumn y grid =
-    [ [if colIdx == y then emptyCandy else candy
-        | (colIdx, candy) <- zip [0..] row] | row <- grid ]
-
--- Clear candies in a 3x3 grid around a given coordinate
-clearSurrounding :: [[Candy]] -> CoordinatePair -> [[Candy]]
-clearSurrounding grid (x, y) =
-    let positionsToClear = [(x + dx, y + dy) | dx <- [-1..1], dy <- [-1..1]]
-    in foldl clearPosition grid positionsToClear
-
--- Clear a candy at a given coordinate
-clearPosition :: [[Candy]] -> CoordinatePair -> [[Candy]]
-clearPosition board (x, y) = setCandyAt board (x, y) EmptyCandy
-
--- Check if a coordinate is valid
-validCoordinate :: GameGrid -> CoordinatePair -> Bool
-validCoordinate (GameGrid board _) (x, y) =
-    not (null board)
-    && x >= 0 && x < length board
-    && y >= 0 && y < length (head board)
 
 -- | Reedem a special candy based on the number of candies in the list
 redeemSpecialCandy :: Action -> Maybe Candy

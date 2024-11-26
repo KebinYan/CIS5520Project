@@ -14,9 +14,8 @@ data Coordinate = Coordinate Int | All  -- All means entire row or column
 type CoordinatePair = (Coordinate, Coordinate)
 
 data Candy = Candy
-    { candyShape  :: CandyShape
-    , candyEffect :: CandyEffect
-    , candySymbol :: String
+    { candyDef :: CandyDefinition
+    , candyEffect :: Effect
     } | EmptyCandy deriving (Show, Eq)
 
 data EffectRange
@@ -36,6 +35,9 @@ data Effect = Effect
     , effectRequirement :: Requirement
     , effectDescription :: String
     } deriving (Show, Eq)
+
+normalEffect :: Effect
+normalEffect = Effect "Normal" (Arbitrary [(Coordinate 0, Coordinate 0)]) (Requirement Eq 0) "No special effect"
 
 data CandyDefinition = CandyDefinition
     { shapeName     :: String

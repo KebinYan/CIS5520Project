@@ -11,7 +11,7 @@ import GameUtils
 main :: IO ()
 main = do 
     putStrLn "Welcome to Candy Crush!" 
-    gameLoop hard
+    gameLoop hard 
     -- gameState <- initializeGameState hard
     -- printGridState gameState
     -- printGrid GameGrid { board = testGrid, seed = 0 }

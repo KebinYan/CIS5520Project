@@ -7,34 +7,29 @@ import qualified Data.List as List
 import System.Random as Random
 import Data.Maybe
 
--- type CoordinatePair = (Int, Int)
-
 data Difficulty = Difficulty {
     dimension :: Int,
-    candyShapes :: [CandyShape],
     maxSteps :: Int
 } deriving (Eq, Show)
 
 easy, medium, hard :: Difficulty
 easy = Difficulty {
     dimension = 5,
-    candyShapes = [Triangle, Circle, Square, Star],
     maxSteps = 50
 }
 medium = Difficulty {
     dimension = 7,
-    candyShapes = [Triangle, Circle, Square, Star, Heart],
     maxSteps = 40
 }
 hard = Difficulty {
     dimension = 9,
-    candyShapes = [Triangle, Circle, Square, Star, Heart , Diamond],
     maxSteps = 30
 }
 
 -- A GameGrid consists of a 2D grid of candies
 data GameGrid = GameGrid {
         board :: [[Candy]],
+        normalCandys :: [Candy],
         emptyCandyCoords :: [CoordinatePair]
     }
   deriving (Show)
@@ -42,7 +37,8 @@ data GameGrid = GameGrid {
 -- check if two boards are equal
 instance Eq GameGrid where
     (==) :: GameGrid -> GameGrid -> Bool
-    (GameGrid board1 _) == (GameGrid board2 _) = board1 == board2
+    (GameGrid board1 normalCandys1 _) == (GameGrid board2 normalCandys2 _) = 
+        board1 == board2 && normalCandys1 == normalCandys2
 
 -- The game state includes the current grid, difficulty level, history for undo, and remaining steps
 data GameState = GameState {
@@ -56,12 +52,13 @@ data GameState = GameState {
 type GameMonad = StateT GameState IO
 
 -- Initialize the grid based on difficulty
-initializeGrid :: Difficulty -> IO GameGrid
-initializeGrid d = do
+initializeGrid :: Difficulty -> [Candy] -> IO GameGrid
+initializeGrid d candys = do
     let dim = dimension d
-    candies <- generateRandomCandyList (dim * dim) (candyShapes d)
+    candies <- generateRandomCandyList (dim * dim) candys
     return $ GameGrid {
         board = splitIntoRows dim candies,
+        normalCandys = candys,
         emptyCandyCoords = []
     }
 
@@ -73,9 +70,9 @@ splitIntoRows n = go
     go ys = let (row, rest) = splitAt n ys in row : go rest
 
 -- Initialize the game state
-initializeGameState :: Difficulty -> IO GameState
-initializeGameState d = do
-    grid <- initializeGrid d
+initializeGameState :: Difficulty -> [Candy] -> IO GameState
+initializeGameState d candys = do
+    grid <- initializeGrid d candys
     return $ GameState {
         currentGrid = grid,
         difficulty = d,
@@ -112,7 +109,7 @@ getRemainingSteps = gets remainingSteps
 
 -- Get the emptyCandyCoords
 getEmptyCandyCoords :: GameGrid -> [CoordinatePair]
-getEmptyCandyCoords (GameGrid _ emptyCandyCoords) = emptyCandyCoords
+getEmptyCandyCoords (GameGrid _ _ emptyCandyCoords) = emptyCandyCoords
 
 -- Add to the score
 addScore :: Int -> GameMonad ()
@@ -128,7 +125,8 @@ undoable = gets (isJust . lastGrid)
 
 -- clone current grid
 cloneGrid :: GameGrid -> GameGrid
-cloneGrid (GameGrid board emptyCandyCoords) = GameGrid board emptyCandyCoords
+cloneGrid (GameGrid board normalCandys emptyCandyCoords) = 
+    GameGrid board normalCandys emptyCandyCoords
 
 -- get candy at a specific position
 getCandyAt :: [[Candy]] -> (Int, Int) -> Maybe Candy
