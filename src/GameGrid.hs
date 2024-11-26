@@ -7,7 +7,7 @@ import qualified Data.List as List
 import System.Random as Random
 import Data.Maybe
 
-type Coordinate = (Int, Int)
+-- type CoordinatePair = (Int, Int)
 
 data Difficulty = Difficulty {
     dimension :: Int,
@@ -35,7 +35,7 @@ hard = Difficulty {
 -- A GameGrid consists of a 2D grid of candies
 data GameGrid = GameGrid {
         board :: [[Candy]],
-        emptyCandyCoords :: [Coordinate]
+        emptyCandyCoords :: [CoordinatePair]
     }
   deriving (Show)
 
@@ -111,7 +111,7 @@ getRemainingSteps :: GameMonad Int
 getRemainingSteps = gets remainingSteps
 
 -- Get the emptyCandyCoords
-getEmptyCandyCoords :: GameGrid -> [Coordinate]
+getEmptyCandyCoords :: GameGrid -> [CoordinatePair]
 getEmptyCandyCoords (GameGrid _ emptyCandyCoords) = emptyCandyCoords
 
 -- Add to the score

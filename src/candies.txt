@@ -1,56 +1,122 @@
 // Description: This file defines the candies and their effects in the game.
-// User should be able to define their own candies and effects by modifying this file.
-// User needs to define the shape of the candy, the effect of the candy, and the range of the effect.
-// The shape of the candy is defined by the shape_name and shape_icon.
-// The effect of the candy is defined by the effect_name, effect_range, and effect_description.
-// Define effect_range: all range values are coordinate offests relative to the generated candy position.
-// For example, if the current candy is at (x,y)
-// effect_range = [(0,:), (0, :)] // the first is x's range, the second is y's range. 
-// effect_range = [(-1,1), (-1,1)] // the first is x's range, the second is y's range. This means 9 coordinates [(x-1,y-1),.., (x+1,y+1)] will be affected.
+// Users can define their own candies and effects by modifying this file.
+// Each candy must have a predefined effect. Users need to define the effect before assigning it to a candy.
+// 
+// Effect Definition:
+// - `effect_name`: The name of the effect.
+// - `effect_range`: The range of the effect.
+// - `effect_requirement`: The number of candies required to trigger the effect. 
+//    - Effects with the same requirement may randomly trigger if matched simultaneously.
+//    - Supports comparison operators such as `>` (default is `=`).
+// - `effect_description`: A textual explanation of the effect.
+//
+// Range Definitions:
+// There are 4 types of effect ranges:
+// 
+// # Circle
+// Parameters: `radius`
+// Effect Range: Includes all positions `(dx, dy)` where `dx² + dy² <= radius²`, relative to `(x, y)`.
+// Example: For `radius = 2`, the effect range includes `(0,0), (0,1), (0,-1), (1,0), (-1,0), (1,1), (-1,-1), (1,-1), (-1,1)`.
+//
+// # Rectangle
+// Parameters: `width`, `height`
+// Effect Range:
+// - If `width = 1`: Includes all positions in the current row. Equivalent to `Arbitrary [(0, :)]`.
+// - If `width` is even: Expands equally to both sides but includes one extra row upward.
+// - If `width` is odd: Expands symmetrically above and below the current row.
+// Example: For `width = 3, height = 2`, the range includes rows `[x-1, x]` and columns `[y-1, y, y+1]`.
+//
+// # Diamond
+// Parameters: `radius`
+// Effect Range: Includes all positions `(dx, dy)` where `|dx| + |dy| <= radius`, forming a diamond shape centered at `(x, y)`.
+// Example: For `radius = 2`, the range includes `(0,0), (0,1), (0,-1), (1,0), (-1,0), (1,1), (-1,-1), (1,-1), (-1,1), (2,0), (-2,0), (0,2), (0,-2)`.
+//
+// # Arbitrary
+// Parameters: List of offsets
+// Effect Range: Takes a predefined list of relative offsets `(dx, dy)`.
+// - `x > 0`: Downward, e.g., `(1, 0)` means the cell below.
+// - `x < 0`: Upward, e.g., `(-1, 0)` means the cell above.
+// - `y > 0`: Rightward, e.g., `(0, 1)` means the cell to the right.
+// - `y < 0`: Leftward, e.g., `(0, -1)` means the cell to the left.
+// - `x = :`: Includes all positions in the current row.
+// - `y = :`: Includes all positions in the current column.
+// Example: `[(0, :), (:, 0)]` represents an entire row and column crossing `(x, y)`.
+
+// # Self-Defined Effects
+// Each candy must reference a previously defined effect.
+effect_name: Normal
+effect_range: Arbitrary [(0, 0)]
+effect_requirement: 0
+effect_description: Normal candies that can be matched with other normal candies.
+
+effect_name: StripedRow
+effect_range: Arbitrary [(0, :)]
+effect_requirement: 4
+effect_description: When matched, clears the entire row.
+
+effect_name: StripedCross 
+effect_range: Arbitrary [(0, :), (:, 0)]
+effect_requirement: >5
+effect_description: When matched, clears the entire row and column.
+
+effect_name: Bomb
+effect_range: Rectangle 3 3
+effect_requirement: 5
+effect_description: When matched, clears all candies in a 3x3 area.
+
+effect_name: CircleBomb
+effect_range: Circle 2
+effect_requirement: 5
+effect_description: When matched, clears all candies in the circular area with radius 2.
+
+effect_name: DiamondBomb
+effect_range: Diamond 2
+effect_requirement: 5
+effect_description: When matched, clears all candies in the diamond-shaped area with radius 2.
+
+// # Self-Defined Candies
+// Each candy must reference a previously defined effect.
+
 shape_name: Triangle
 shape_icon: ▲
 effect_name: Normal
-effect_range:
-effect_description: 
 
 shape_name: Square
 shape_icon: ■
 effect_name: Normal
-effect_range:
-effect_description:
 
-shape_name: Circle
-shape_icon: ●
+shape_name: Spade
+shape_icon: ♠
 effect_name: Normal
-effect_range:
-effect_description:
+
+shape_name: Club
+shape_icon: ♣
+effect_name: Normal
 
 shape_name: Star
 shape_icon: ★
 effect_name: Normal
-effect_range:
-effect_description:
 
 shape_name: Heart
 shape_icon: ♥
 effect_name: Normal
-effect_range:
-effect_description:
-
-shape_name: Diamond
-shape_icon: ♦
-effect_name: Normal
-effect_range:
-effect_description:
 
 shape_name: Asterisk
 shape_icon: *
 effect_name: Bomb
-effect_range: range[(x,y)...]
-effect_description: clearRange
+
+shape_name: Circle
+shape_icon: ●
+effect_name: CircleBomb
+
+shape_name: Diamond
+shape_icon: ♦
+effect_name: DiamondBomb
 
 shape_name: Cross
 shape_icon: ✚
 effect_name: StripedCross
-effect_range: row [offset]; column [idx...]; range[(x,y)...]
-effect_description: clearRow clearColumn
+
+shape_name: Minus
+shape_icon: - 
+effect_name: StripedRow

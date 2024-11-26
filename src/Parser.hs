@@ -5,14 +5,15 @@
 -- exported by this file, as well as the `Functor`, `Applicative` and
 -- `Alternative` operations.
 module Parser(Parser, doParse, wsP,
-                          get, eof, filter, 
-                          parse, parseFromFile, ParseError,
-                          satisfy, alpha, digit, upper, lower, space,
-                          char, string, intP,
-                          chainl1, chainl, choice,
-                          between, sepBy1, sepBy) where
+              get, eof, filter, 
+              parse, parseFromFile, ParseError,
+              satisfy, alpha, digit, upper, lower, space,
+              char, string, intP,
+              chainl1, chainl, choice,
+              between, sepBy1, sepBy) where
 
 import Prelude hiding (filter)
+import Data.List (isPrefixOf)
 
 import Control.Applicative (Alternative(..))
 import Data.Char
@@ -35,6 +36,15 @@ instance Applicative Parser where
   p1 <*> p2 = P $ \ s -> do (f, s') <- doParse p1 s
                             (x,s'') <- doParse p2 s'
                             return (f x, s'')
+
+instance Monad Parser where
+    return = pure
+    (>>=) = bindParser
+
+bindParser :: Parser a -> (a -> Parser b) -> Parser b
+bindParser p f = P $ \s -> do
+    (a, s') <- doParse p s
+    doParse (f a) s'
                             
 instance Alternative Parser where
   empty = P $ const Nothing
@@ -42,7 +52,7 @@ instance Alternative Parser where
 
 -- | Strip whitespace from the beginning and end of a parser
 wsP :: Parser a -> Parser a
-wsP p = many space *> p <* many space
+wsP p = many (satisfy isSpace) *> p <* many (satisfy isSpace)
 
 -- | Combine two Maybe values together, producing the first
 -- successful result
@@ -121,7 +131,10 @@ char c = satisfy (c ==)
 -- | Parses and returns the specified string.
 -- Succeeds only if the input is the given string
 string :: String -> Parser String
-string = foldr (\c p -> (:) <$> char c <*> p) (pure "")
+string str = P $ \s ->
+    if str `isPrefixOf` s
+        then Just (str, drop (length str) s)
+        else Nothing
 
 -- | succeed only if the input is a (positive or negative) integer
 intP :: Parser Int
