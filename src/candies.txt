@@ -1,0 +1,56 @@
+// Description: This file defines the candies and their effects in the game.
+// User should be able to define their own candies and effects by modifying this file.
+// User needs to define the shape of the candy, the effect of the candy, and the range of the effect.
+// The shape of the candy is defined by the shape_name and shape_icon.
+// The effect of the candy is defined by the effect_name, effect_range, and effect_description.
+// Define effect_range: all range values are coordinate offests relative to the generated candy position.
+// For example, if the current candy is at (x,y)
+// effect_range = [(0,:), (0, :)] // the first is x's range, the second is y's range. 
+// effect_range = [(-1,1), (-1,1)] // the first is x's range, the second is y's range. This means 9 coordinates [(x-1,y-1),.., (x+1,y+1)] will be affected.
+shape_name: Triangle
+shape_icon: ▲
+effect_name: Normal
+effect_range:
+effect_description: 
+
+shape_name: Square
+shape_icon: ■
+effect_name: Normal
+effect_range:
+effect_description:
+
+shape_name: Circle
+shape_icon: ●
+effect_name: Normal
+effect_range:
+effect_description:
+
+shape_name: Star
+shape_icon: ★
+effect_name: Normal
+effect_range:
+effect_description:
+
+shape_name: Heart
+shape_icon: ♥
+effect_name: Normal
+effect_range:
+effect_description:
+
+shape_name: Diamond
+shape_icon: ♦
+effect_name: Normal
+effect_range:
+effect_description:
+
+shape_name: Asterisk
+shape_icon: *
+effect_name: Bomb
+effect_range: range[(x,y)...]
+effect_description: clearRange
+
+shape_name: Cross
+shape_icon: ✚
+effect_name: StripedCross
+effect_range: row [offset]; column [idx...]; range[(x,y)...]
+effect_description: clearRow clearColumn

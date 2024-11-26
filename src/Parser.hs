@@ -4,11 +4,11 @@
 -- All `Parser`s must be built using the following functions
 -- exported by this file, as well as the `Functor`, `Applicative` and
 -- `Alternative` operations.
-module Parser(Parser, doParse, wsP, intP,
+module Parser(Parser, doParse, wsP,
                           get, eof, filter, 
                           parse, parseFromFile, ParseError,
                           satisfy, alpha, digit, upper, lower, space,
-                          char, string, int,
+                          char, string, intP,
                           chainl1, chainl, choice,
                           between, sepBy1, sepBy) where
 
@@ -39,10 +39,6 @@ instance Applicative Parser where
 instance Alternative Parser where
   empty = P $ const Nothing
   p1 <|> p2 = P $ \s -> doParse p1 s `firstJust` doParse p2 s
-
--- | Parse an integer
-intP :: Parser Int
-intP = read <$> some digit
 
 -- | Strip whitespace from the beginning and end of a parser
 wsP :: Parser a -> Parser a
@@ -128,8 +124,8 @@ string :: String -> Parser String
 string = foldr (\c p -> (:) <$> char c <*> p) (pure "")
 
 -- | succeed only if the input is a (positive or negative) integer
-int :: Parser Int
-int = f <$> ((++) <$> string "-" <*> some digit <|> some digit) where
+intP :: Parser Int
+intP = f <$> ((++) <$> string "-" <*> some digit <|> some digit) where
          f str = case readMaybe str of 
                 Just x -> x 
                 Nothing -> error $ "Bug: can't parse '" ++ str ++ "' as an int"

@@ -32,3 +32,18 @@ getCandyShapeCount = length [Triangle .. Asterisk]
 getCandyEffectCount :: Int
 getCandyEffectCount = length [Normal .. StripedCross]
 
+-- Helper function to represent a single candy as a character or string
+candyToSymbol :: Candy -> String
+candyToSymbol EmptyCandy = " "
+candyToSymbol (Candy { candyShape = t, candyEffect = e }) =
+    let (typeSymbol, colorSymbol) = case t of
+            Triangle -> ("▲", "\ESC[30m")
+            Circle   -> ("●", "\ESC[30m")
+            Square   -> ("■", "\ESC[30m")
+            Star     -> ("★", "\ESC[30m")
+            Heart    -> ("♥", "\ESC[30m")
+            Diamond  -> ("◆", "\ESC[30m")
+            Minus    -> ("−", "\ESC[91m")
+            Cross    -> ("✚", "\ESC[91m")
+            Asterisk -> ("✱", "\ESC[91m")
+    in colorSymbol ++ typeSymbol ++ "\ESC[0m"  -- reset color after symbol
