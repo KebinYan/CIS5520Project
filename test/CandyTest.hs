@@ -158,24 +158,6 @@ testCandyParser = TestCase $ do
     let expected = Right (CandyDefinition "CircleCandy" "O" "CircleEffect")
     assertEqual "Parses a complete candy definition" expected (runParser candyP input)
 
-testFileParser :: Test
-testFileParser = TestCase $ do
-    let input = unlines
-            [ "effect_name: TestEffect"
-            , "effect_range: Circle 3"
-            , "effect_requirement: >= 2"
-            , "effect_description: A circular effect"
-            , ""
-            , "shape_name: CircleCandy"
-            , "shape_icon: O"
-            , "effect_name: TestEffect"
-            ]
-    let expected = Right
-            ( [ Effect "TestEffect" (Circle 3) (Requirement Ge 2) "A circular effect" ]
-            , [ CandyDefinition "CircleCandy" "O" "TestEffect" ]
-            )
-    assertEqual "Parses a valid file with effects and candies" expected (runParser fileP input)
-
 testEffectCheckerValid :: Test
 testEffectCheckerValid = TestCase $ do
     let effects = [Effect "TestEffect" (Circle 3) (Requirement Ge 2) "A circular effect"]
@@ -198,10 +180,121 @@ testEffectCheckerInvalid = TestCase $ do
         (Left "Undefined effects used in candies: [\"UndefinedEffect\"]") 
         (checkEffects effects candies)
 
+testFileParserValid :: Test
+testFileParserValid = TestCase $ do
+    let input = unlines
+            [ "effect_name: TestEffect"
+            , "effect_range: Circle 3"
+            , "effect_requirement: >= 2"
+            , "effect_description: A circular effect"
+            , ""
+            , "shape_name: CircleCandy"
+            , "shape_icon: O"
+            , "effect_name: TestEffect"
+            ]
+    let expected = Right
+            ( [ Effect "TestEffect" (Circle 3) (Requirement Ge 2) "A circular effect" ]
+            , [ CandyDefinition "CircleCandy" "O" "TestEffect" ]
+            )
+    assertEqual "Parses a valid file with effects and candies" expected (runParser fileP  input)
+
+testEffectValid :: Test
+testEffectValid = TestCase $ do
+    let input = "effect_name: Normal\neffect_range: Arbitrary [(0, 0)]\neffect_requirement: 0\neffect_description: Normal candies\n"
+    let expected = Right (Effect "Normal" (Arbitrary [(Coordinate 0, Coordinate 0)]) (Requirement Eq 0) "Normal candies")
+    assertEqual "Parses a valid effect" expected (runParser effectP input)
+
+testEffectInvalidRange :: Test
+testEffectInvalidRange = TestCase $ do
+    let input = "effect_name: InvalidEffect\neffect_range: InvalidType 3\neffect_requirement: 0\neffect_description: Invalid effect\n"
+    let result = runParser effectWithRecovery input
+    assertBool "Handles invalid effect range gracefully" (isLeft result)
+
+testCandyWithUndefinedEffect :: Test
+testCandyWithUndefinedEffect = TestCase $ do
+    let effects = [Effect "DefinedEffect" (Circle 3) (Requirement Ge 2) "A circular effect"]
+    let candies = [CandyDefinition "SomeCandy" "O" "UndefinedEffect"]
+    let expected = Left "Undefined effects used in candies: [\"UndefinedEffect\"]"
+    assertEqual "Detects undefined effects in candies" expected (checkEffects effects candies)
+
+testInvalidEffectInFile :: Test
+testInvalidEffectInFile = TestCase $ do
+    let input = unlines
+            [ "effect_name: ValidEffect"
+            , "effect_range: Circle 5"
+            , "effect_requirement: >= 2"
+            , "effect_description: A valid effect"
+            , ""
+            , "effect_name: InvalidEffect"
+            , "effect_range: InvalidType 3"
+            , "effect_requirement: 0"
+            , "effect_description: An invalid effect"
+            , ""
+            , "shape_name: CircleCandy"
+            , "shape_icon: O"
+            , "effect_name: ValidEffect"
+            , "shape_name: UndefinedCandy"
+            , "shape_icon: X"
+            , "effect_name: UndefinedEffect"
+            ]
+    let expected = Right
+            ( [ Effect "ValidEffect" (Circle 5) (Requirement Ge 2) "A valid effect" ]
+            , [ CandyDefinition "CircleCandy" "O" "ValidEffect" ]
+            )
+    let result = runParser fileP input
+    assertEqual "Parses valid elements while skipping invalid ones" expected result
+
+testFileParserUndefinedCandyAndEffect :: Test
+testFileParserUndefinedCandyAndEffect = TestCase $ do
+    let input = unlines
+            [ "effect_name: TestEffect"
+            , "effect_range: Circle 3"
+            , "effect_requirement: >= 2"
+            , "effect_description: A circular effect"
+            , ""
+            , "shape_name: CircleCandy"
+            , "shape_icon: O"
+            , "effect_name: TestEffect"
+            , ""
+            , "effect_name: InvalidEffect"
+            , "effect_range: InvalidType 3"
+            , "effect_requirement: 0"
+            , "effect_description: Invalid effect"
+            , ""
+            , "effect_name: AnotherValidEffect"
+            , "effect_range: Diamond 5"
+            , "effect_requirement: > 10"
+            , "effect_description: Another valid effect"
+            , ""
+            , "shape_name: UndefinedCandy"
+            , "shape_icon: X"
+            , "effect_name: UndefinedEffect"
+            , ""
+            , "shape_name: ValidCandy"
+            , "shape_icon: V"
+            , "effect_name: AnotherValidEffect"
+            ]
+    let expected = Right
+            ( [ Effect "TestEffect" (Circle 3) (Requirement Ge 2) "A circular effect"
+              , Effect "AnotherValidEffect" (Diamond 5) (Requirement Gt 10) "Another valid effect"
+              ]
+            , [ CandyDefinition "CircleCandy" "O" "TestEffect"
+              , CandyDefinition "ValidCandy" "V" "AnotherValidEffect"
+              ]
+            )
+    let result = runParser fileP input
+    assertEqual "Parses valid elements while skipping invalid ones" expected result
+
+-- Utility function to check if the result is `Left`
+isLeft :: Either a b -> Bool
+isLeft (Left _) = True
+isLeft _        = False
+
 -- Run all unit tests with labels
 runUnitTests :: IO Counts
 runUnitTests = runTestTT $ TestList
-    [ TestLabel "testCoordinateInt" testCoordinateInt
+    [ 
+      TestLabel "testCoordinateInt" testCoordinateInt
     , TestLabel "testCoordinateAll" testCoordinateAll
     , TestLabel "testCoordinateInvalid" testCoordinateInvalid
     , TestLabel "testCoordinatePairValid" testCoordinatePairValid
@@ -215,9 +308,14 @@ runUnitTests = runTestTT $ TestList
     , TestLabel "testRequirementEq" testRequirementEq
     , TestLabel "testEffectParser" testEffectParser
     , TestLabel "testCandyParser" testCandyParser
-    , TestLabel "testFileParser" testFileParser
     , TestLabel "testEffectCheckerValid" testEffectCheckerValid
     , TestLabel "testEffectCheckerInvalid" testEffectCheckerInvalid
+    , TestLabel "testFileParserValid" testFileParserValid
+    , TestLabel "testEffectValid" testEffectValid
+    , TestLabel "testEffectInvalidRange" testEffectInvalidRange
+    , TestLabel "testCandyWithUndefinedEffect" testCandyWithUndefinedEffect
+    , TestLabel "testInvalidEffectInFile" testInvalidEffectInFile
+    , TestLabel "testFileParserUndefinedCandyAndEffect" testFileParserUndefinedCandyAndEffect
     ]
 
 -- Main function

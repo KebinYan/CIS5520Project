@@ -3,12 +3,14 @@ module Candy where
 import Data.Char
 import Control.Applicative
 import Parser
+import Data.Either (rights)
+import Data.Functor (void)
 
 -- Data Types
 type CandyShape = String
 type CandyEffect = String
 
-data Coordinate = Coordinate Int | All  -- All means entire row or column
+data Coordinate = Coordinate Int | All
     deriving (Show, Eq)
 
 type CoordinatePair = (Coordinate, Coordinate)
@@ -22,11 +24,10 @@ data EffectRange
     = Circle Int
     | Rectangle Int Int
     | Diamond Int
-    | Arbitrary [CoordinatePair]  -- Use CoordinatePair here
+    | Arbitrary [CoordinatePair]
     deriving (Show, Eq)
 
 data Operator = Eq | Gt | Ge deriving (Show, Eq)
-
 data Requirement = Requirement Operator Int deriving (Show, Eq)
 
 data Effect = Effect
@@ -46,27 +47,19 @@ data CandyDefinition = CandyDefinition
     } deriving (Show, Eq)
 
 -- Parsers
-
 operatorP :: Parser Operator
-operatorP =
-    (string ">=" *> pure Ge)
-    <|> (string ">"  *> pure Gt)
-    <|> (string "="  *> pure Eq)
+operatorP = (string ">=" *> pure Ge) <|> (string ">" *> pure Gt) <|> (string "=" *> pure Eq)
 
 requirementP :: Parser Requirement
 requirementP = do
-    wsP $ pure ()  -- Consume any leading whitespace
+    wsP $ pure ()
     op <- operatorP <|> pure Eq
     n <- wsP intP
     return $ Requirement op n
 
 effectRangeP :: Parser EffectRange
-effectRangeP = wsP $ choice
-    [ circleP
-    , rectangleP
-    , diamondP
-    , arbitraryP
-    ]
+effectRangeP =
+    wsP $ choice [try circleP, try rectangleP, try diamondP, try arbitraryP]
 
 circleP :: Parser EffectRange
 circleP = do
@@ -127,12 +120,30 @@ candyP = do
     effectRef <- wsP $ many (satisfy (/= '\n'))
     return $ CandyDefinition name icon effectRef
 
+lookForHeaderOrEOF :: Parser ()
+lookForHeaderOrEOF = do
+    many (wsP (commentP <|> emptyLineP))
+    wsP $ pure ()
+    (void (string "effect_name:" <|> string "shape_name:")) <|> eof
+
+effectWithRecovery :: Parser (Either String Effect)
+effectWithRecovery =
+    (Right <$> try effectP)
+    <|> (Left <$> manyTill anyChar (lookAhead lookForHeaderOrEOF <|> eof))
+
+candyWithRecovery :: Parser (Either String CandyDefinition)
+candyWithRecovery =
+    (Right <$> try candyP)
+    <|> (Left <$> manyTill anyChar (lookAhead lookForHeaderOrEOF <|> eof))
+
+
+
 fileP :: Parser ([Effect], [CandyDefinition])
 fileP = do
     wsP $ many (commentP <|> emptyLineP)
-    effects <- many (effectP <* wsP (many (commentP <|> emptyLineP)))
-    candies <- many (candyP <* wsP (many (commentP <|> emptyLineP)))
-    return (effects, candies)
+    effects <- many $ effectWithRecovery <* wsP (many (commentP <|> emptyLineP))
+    candies <- many $ candyWithRecovery <* wsP (many (commentP <|> emptyLineP))
+    return (rights effects, rights candies)
 
 commentP :: Parser ()
 commentP = wsP $ do
@@ -147,7 +158,6 @@ emptyLineP = wsP $ do
     char '\n'
     return ()
 
--- Main Function
 main :: IO ()
 main = do
     content <- readFile "src/candies.txt"

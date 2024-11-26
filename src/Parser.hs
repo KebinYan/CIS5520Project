@@ -5,12 +5,13 @@
 -- exported by this file, as well as the `Functor`, `Applicative` and
 -- `Alternative` operations.
 module Parser(Parser, doParse, wsP,
-              get, eof, filter, 
+              get, eof, filter,
               parse, parseFromFile, ParseError,
               satisfy, alpha, digit, upper, lower, space,
               char, string, intP,
               chainl1, chainl, choice,
-              between, sepBy1, sepBy) where
+              between, sepBy1, sepBy,
+              lookAhead, manyTill, anyChar, try) where
 
 import Prelude hiding (filter)
 import Data.List (isPrefixOf)
@@ -30,7 +31,7 @@ newtype Parser a = P { doParse :: String -> Maybe (a, String) }
 instance Functor Parser where
   fmap f p = P $ \s -> do (c, cs) <- doParse p s
                           return (f c, cs)
-                          
+
 instance Applicative Parser where
   pure x    = P $ \s -> Just (x,s)
   p1 <*> p2 = P $ \ s -> do (f, s') <- doParse p1 s
@@ -45,7 +46,7 @@ bindParser :: Parser a -> (a -> Parser b) -> Parser b
 bindParser p f = P $ \s -> do
     (a, s') <- doParse p s
     doParse (f a) s'
-                            
+
 instance Alternative Parser where
   empty = P $ const Nothing
   p1 <|> p2 = P $ \s -> doParse p1 s `firstJust` doParse p2 s
@@ -64,18 +65,18 @@ firstJust Nothing  y = y
 -- | Return the next character from the input
 get :: Parser Char
 get = P $ \s -> case s of
-                   (c : cs) -> Just (c, cs) 
+                   (c : cs) -> Just (c, cs)
                    []       -> Nothing
 
 -- | This parser *only* succeeds at the end of the input.
 eof :: Parser ()
 eof = P $ \s -> case s of
-                  []  -> Just ((),[]) 
+                  []  -> Just ((),[])
                   _:_ -> Nothing
 
 -- | Filter the parsing results by a predicate
 filter :: (a -> Bool) -> Parser a -> Parser a
-filter f p = P $ \s ->  do 
+filter f p = P $ \s ->  do
                          (c , cs) <- doParse p s
                          guard (f c)
                          return (c , cs)
@@ -109,7 +110,7 @@ parseFromFile parser filename = do
         pure $ parse parser str)
     (\e ->
         pure $ Left $ "Error:" ++ show e)
-    
+
 
 -- | Return the next character if it satisfies the given predicate
 satisfy :: (Char -> Bool) -> Parser Char
@@ -139,8 +140,8 @@ string str = P $ \s ->
 -- | succeed only if the input is a (positive or negative) integer
 intP :: Parser Int
 intP = f <$> ((++) <$> string "-" <*> some digit <|> some digit) where
-         f str = case readMaybe str of 
-                Just x -> x 
+         f str = case readMaybe str of
+                Just x -> x
                 Nothing -> error $ "Bug: can't parse '" ++ str ++ "' as an int"
 
 
@@ -158,7 +159,7 @@ p `chainl1` pop = foldl comb <$> p <*> rest where
 chainl :: Parser b -> Parser (b -> b -> b) -> b -> Parser b
 chainl p pop x = chainl1 p pop <|> pure x
 
-  
+
 -- | Combine all parsers in the list (sequentially)
 choice :: [Parser a] -> Parser a
 choice = asum -- equivalent to: foldr (<|>) empty
@@ -180,4 +181,19 @@ sepBy1 :: Parser a -> Parser sep -> Parser [a]
 sepBy1 p sep = (:) <$> p <*> many (sep *> p)
 
 ---------------------------------------------
+-- | Parses any character
+anyChar :: Parser Char
+anyChar = satisfy (const True)
 
+-- | Parses 'p' until parser 'end' succeeds
+manyTill :: Parser a -> Parser end -> Parser [a]
+manyTill p end = ([] <$ end) <|> ((:) <$> p <*> manyTill p end)
+
+-- | Parses 'p' without consuming input
+lookAhead :: Parser a -> Parser a
+lookAhead p = P $ \s -> do
+    (result, _) <- doParse p s
+    return (result, s)
+
+try :: Parser a -> Parser a
+try p = P $ \s ->  doParse p s <|> Nothing-- if p fails, return Nothing, otherwise return Just
