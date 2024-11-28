@@ -42,10 +42,14 @@
 // - `y = :`: Includes all positions in the current column.
 // Example: `[(0, :), (:, 0)]` represents an entire row and column crossing `(x, y)`.
 
+DIFFICULTY_CONSTANT
+dimension: 5
+max_steps: 50
+
 // # Self-Defined Effects
 // Each candy must reference a previously defined effect.
 effect_name: Normal
-effect_range: Arbitrary [(0, 0)]
+effect_range: Arbitrary [(0,0)]
 effect_requirement: 0
 effect_description: Normal candies that can be matched with other normal candies.
 
@@ -120,3 +124,4 @@ effect_name: StripedCross
 shape_name: Minus
 shape_icon: - 
 effect_name: StripedRow
+

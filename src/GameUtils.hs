@@ -9,11 +9,12 @@ import Control.Monad (replicateM)
 -- | candyShapes: the list of available CandyShape
 generateRandomCandy :: [CandyShape] -> IO Candy
 generateRandomCandy candyShapes = do
-    randomIndex <- randomRIO (0, length candyShapes - 1)
-    return Candy {
-        candyShape = candyShapes !! randomIndex,
-        candyEffect = Normal
-    }
+    -- randomIndex <- randomRIO (0, length candyShapes - 1)
+    -- return Candy {
+    --     candyShape = candyShapes !! randomIndex,
+    --     candyEffect = Normal
+    -- }
+    undefined
 
 -- Generate a list of random candies based on a provided list of CandyShape
 -- | len: the number of candies to generate
