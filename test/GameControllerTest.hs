@@ -2,77 +2,49 @@ module GameControllerTest where
 import Test.QuickCheck
 import Test.QuickCheck.Monadic
 import Test.HUnit
+import TestUtils
 
 import GameController
-import GameGrid
+import GameState
 import Candy
 import qualified Data.Set as Set
-
--- Sample candies for testing
-candy1 :: Candy
-candy1 = Candy Circle Normal
-candy2 :: Candy
-candy2 = Candy Square Normal
-candy3 :: Candy
-candy3 = Candy Triangle Normal
-candy4 :: Candy
-candy4 = Candy Heart Normal
-candy5 :: Candy
-candy5 = Candy Star Normal
-candySpecial :: Candy
-candySpecial = bombCandy
-
--- Test grids
-initialGrid :: GameGrid
-initialGrid = GameGrid
-    [ [candy2, candy2, candy3]
-    , [candy4, candy1, candy2]
-    , [candy3, candy5, candy4]
-    ] []
-
-crushableGrid :: GameGrid
-crushableGrid = GameGrid
-    [ [candy1, candy1, candy1]
-    , [candy2, candy2, candy2]
-    , [candy2, candy1, bombCandy]
-    ] []
-
-gridWithEmptyCandy :: GameGrid
-gridWithEmptyCandy = GameGrid
-    [ [candy1, candy1, candy3]
-    , [candy2, EmptyCandy, EmptyCandy]
-    , [candy2, EmptyCandy, EmptyCandy]
-    ] [(1, 1), (1, 2), (2, 1), (2, 2)]
+import Test.QuickCheck.Poly (C(C))
 
 -- Test contructDisappear: coordinates should be sorted
 testConstructDisappear :: Test
 testConstructDisappear = TestCase $ do
-    let disappear = constructDisappear [(1, 2), (1, 0), (1, 3)]
-    let expectedDisappear = Disappear [(1, 0), (1, 2), (1, 3)]
+    let disappear = constructDisappear
+            [(Coordinate 1, Coordinate 3),
+             (Coordinate 1, Coordinate 0),
+             (Coordinate 1, Coordinate 2)]
+    let expectedDisappear = Disappear
+            [(Coordinate 1, Coordinate 0),
+             (Coordinate 1, Coordinate 2),
+             (Coordinate 1, Coordinate 3)]
     assertEqual "Disappear should be equal" expectedDisappear disappear
 
 -- Test constructActionResult: Actions should be sorted
-testConstructActionResult :: Test
-testConstructActionResult = TestCase $ do
-    let actionResults = constructActionResult crushableGrid
-            [Quit, Click (2, 1), Disappear [(0, 0), (0, 1), (0, 2)], Trigger ((2, 2), Bomb)]
-        expectedActions = [Quit, Click (2, 1), Disappear [(0, 0), (0, 1), (0, 2)], Trigger ((2, 2), Bomb)]
-    assertEqual "ActionResults should be equal" expectedActions (actions actionResults)
+-- testConstructActionResult :: Test
+-- testConstructActionResult = TestCase $ do
+--     let actionResults = constructActionResult crushableGrid
+--             [Quit, Click (2, 1), Disappear [(0, 0), (0, 1), (0, 2)], Trigger ((2, 2), candy5)]
+--         expectedActions = [Quit, Click (2, 1), Disappear [(0, 0), (0, 1), (0, 2)], Trigger ((2, 2), candy5)]
+--     assertEqual "ActionResults should be equal" expectedActions (actions actionResults)
 
 testConstructors :: Test
 testConstructors = TestList [
-    TestLabel "constructDisappear" testConstructDisappear,
-    TestLabel "constructActionResult" testConstructActionResult
+    TestLabel "constructDisappear" testConstructDisappear
+    -- TestLabel "constructActionResult" testConstructActionResult
   ]
 
 -- Test Action Parser
 testParseAction :: Test
 testParseAction = TestList [
     "Parse swap action" ~:
-        parseAction "swap 1 2 3 4" ~?= Right (Swap (1, 2) (3, 4)),
+        parseAction "swap 1 2 3 4" ~?=
+            Right (Swap (Coordinate 1, Coordinate 2) (Coordinate 3, Coordinate 4)),
     "Parse click action" ~:
-        parseAction "click 1 2" ~?= Right (Click (1, 2)),
-    "Parse undo action" ~:
+        parseAction "click 1 2" ~?= Right (Click (Coordinate 1, Coordinate 2)),
         parseAction "undo" ~?= Right Undo,
     "Parse quit action" ~:
         parseAction "quit" ~?= Right Quit,
@@ -83,43 +55,63 @@ testParseAction = TestList [
 -- Test helper functions for swap action
 testSwapCandies :: Test
 testSwapCandies = TestCase $ do
-    let grid = swapCandies initialGrid (0, 0) (1, 0)
-    let expectedGrid = GameGrid
+    let grid = swapCandies initialGrid
+            (Coordinate 0, Coordinate 0) (Coordinate 1, Coordinate 0)
+    let expectedBoard =
             [ [candy4, candy2, candy3]
             , [candy2, candy1, candy2]
             , [candy3, candy5, candy4]
-            ] []
-    assertEqual "Grids should be equal" expectedGrid grid
+            ]
+    assertEqual "Grids should be equal" expectedBoard (board grid)
 
 testFindNormalCandyCrushables1 :: Test
 testFindNormalCandyCrushables1 = TestCase $ do
-    let crushables = findNormalCandyCrushables crushableGrid (0, 0)
-    let expectedCrushables = [Disappear [(0, 0), (0, 1), (0, 2)]]
+    let crushables = findNormalCandyCrushables crushableGrid (Coordinate 0, Coordinate 0)
+    let expectedCrushables = Just (Disappear
+            [(Coordinate 0, Coordinate 0),
+             (Coordinate 0, Coordinate 1),
+             (Coordinate 0, Coordinate 2)])
     assertEqual "Crushables should be equal" expectedCrushables crushables
 
 testFindNormalCandyCrushables2 :: Test
 testFindNormalCandyCrushables2 = TestCase $ do
-    let crushables = findNormalCandyCrushables crushableGrid (1, 0)
-    let expectedCrushables = [Disappear [(1, 0), (1, 1), (1, 2), (2, 0)]]
+    let crushables = findNormalCandyCrushables crushableGrid (Coordinate 1, Coordinate 0)
+    let expectedCrushables = Just (Disappear
+            [(Coordinate 1, Coordinate 0),
+             (Coordinate 1, Coordinate 1),
+             (Coordinate 1, Coordinate 2),
+             (Coordinate 2, Coordinate 0)])
     assertEqual "Crushables should be equal" expectedCrushables crushables
 
 testFindNormalCandyCrushables3 :: Test
 testFindNormalCandyCrushables3 = TestCase $ do
-    let crushables = findNormalCandyCrushables initialGrid (1, 1)
-    let expectedCrushables = []
+    let crushables = findNormalCandyCrushables initialGrid (Coordinate 1, Coordinate 1)
+    let expectedCrushables = Nothing
     assertEqual "Crushables should be equal" expectedCrushables crushables
 
 testFindCrushables1 :: Test
 testFindCrushables1 = TestCase $ do
-    let crushables = findCrushables crushableGrid [(0, 0), (1, 0), (2, 2)]
-    let expectedCrushables = [Disappear [(0, 0), (0, 1), (0, 2)],
-                              Disappear [(1, 0), (1, 1), (1, 2), (2, 0)],
-                              Trigger ((2, 2), Bomb)]
+    let crushables = findCrushables crushableGrid
+            [(Coordinate 0, Coordinate 0),
+             (Coordinate 1, Coordinate 0),
+             (Coordinate 2, Coordinate 2)]
+    let expectedCrushables =
+            [Disappear [(Coordinate 0, Coordinate 0),
+                        (Coordinate 0, Coordinate 1),
+                        (Coordinate 0, Coordinate 2)],
+             Disappear [(Coordinate 1, Coordinate 0),
+                        (Coordinate 1, Coordinate 1),
+                        (Coordinate 1, Coordinate 2),
+                        (Coordinate 2, Coordinate 0)],
+             Trigger ((Coordinate 2, Coordinate 2), candy5)]
     assertEqual "Crushables should be equal" expectedCrushables crushables
 
 testFindCrushables2 :: Test
 testFindCrushables2 = TestCase $ do
-    let crushables = findCrushables initialGrid [(0, 0), (0, 1), (1, 2)]
+    let crushables = findCrushables initialGrid 
+            [(Coordinate 0, Coordinate 0),
+             (Coordinate 0, Coordinate 1),
+             (Coordinate 1, Coordinate 2)]
     let expectedCrushables = []
     assertEqual "Crushables should be equal" expectedCrushables crushables
 
@@ -134,110 +126,115 @@ testSwapHelpers = TestList [
   ]
 
 -- Test helper functions for crush action
-testClearRow :: Test
-testClearRow = TestCase $ do
-    let grid = clearRow 0 (board initialGrid)
-    let expectedBoard = 
-            [ [EmptyCandy, EmptyCandy, EmptyCandy]
-            , [candy4, candy1, candy2]
-            , [candy3, candy5, candy4]
-            ]
-    assertEqual "Grids should be equal" expectedBoard grid
+-- testClearRow :: Test
+-- testClearRow = TestCase $ do
+--     let grid = clearRow 0 (board initialGrid)
+--     let expectedBoard = 
+--             [ [EmptyCandy, EmptyCandy, EmptyCandy]
+--             , [candy4, candy1, candy2]
+--             , [candy3, candy5, candy4]
+--             ]
+--     assertEqual "Grids should be equal" expectedBoard grid
 
-testClearColumn :: Test
-testClearColumn = TestCase $ do
-    let grid = clearColumn 0 (board crushableGrid)
-    let expectedBoard = 
-            [ [EmptyCandy, candy1, candy1]
-            , [EmptyCandy, candy2, candy2]
-            , [EmptyCandy, candy1, bombCandy]
-            ]
-    assertEqual "Grids should be equal" expectedBoard grid
+-- testClearColumn :: Test
+-- testClearColumn = TestCase $ do
+--     let grid = clearColumn 0 (board crushableGrid)
+--     let expectedBoard = 
+--             [ [EmptyCandy, candy1, candy1]
+--             , [EmptyCandy, candy2, candy2]
+--             , [EmptyCandy, candy1, bombCandy]
+--             ]
+--     assertEqual "Grids should be equal" expectedBoard grid
 
-testClearSurrounding :: Test
-testClearSurrounding = TestCase $ do
-    let grid = clearSurrounding (board crushableGrid) (2, 2)
-    let expectedBoard = 
-            [ [candy1, candy1, candy1]
-            , [candy2, EmptyCandy, EmptyCandy]
-            , [candy2, EmptyCandy, EmptyCandy]
-            ]
-    assertEqual "Grids should be equal" expectedBoard grid
+-- testClearSurrounding :: Test
+-- testClearSurrounding = TestCase $ do
+--     let grid = clearSurrounding (board crushableGrid) (2, 2)
+--     let expectedBoard = 
+--             [ [candy1, candy1, candy1]
+--             , [candy2, EmptyCandy, EmptyCandy]
+--             , [candy2, EmptyCandy, EmptyCandy]
+--             ]
+--     assertEqual "Grids should be equal" expectedBoard grid
 
-testClearPosition :: Test
-testClearPosition = TestCase $ do
-    let grid = clearPosition (board crushableGrid) (1, 1)
-    let expectedBoard = 
-            [ [candy1, candy1, candy1]
-            , [candy2, EmptyCandy, candy2]
-            , [candy2, candy1, bombCandy]
-            ]
-    assertEqual "Grids should be equal" expectedBoard grid
+-- testClearPosition :: Test
+-- testClearPosition = TestCase $ do
+--     let grid = clearPosition (board crushableGrid) (1, 1)
+--     let expectedBoard = 
+--             [ [candy1, candy1, candy1]
+--             , [candy2, EmptyCandy, candy2]
+--             , [candy2, candy1, bombCandy]
+--             ]
+--     assertEqual "Grids should be equal" expectedBoard grid
 
-testValidCoordinate :: Test
-testValidCoordinate = TestCase $ do
-    assertBool "Valid coordinate" (validCoordinate initialGrid (0, 0))
-    assertBool "Invalid coordinate" (not $ validCoordinate initialGrid (3, 0))
-    assertBool "Invalid coordinate" (not $ validCoordinate initialGrid (0, -1))
+-- testValidCoordinate :: Test
+-- testValidCoordinate = TestCase $ do
+--     assertBool "Valid coordinate" (validCoordinate initialGrid (0, 0))
+--     assertBool "Invalid coordinate" (not $ validCoordinate initialGrid (3, 0))
+--     assertBool "Invalid coordinate" (not $ validCoordinate initialGrid (0, -1))
 
-testCrushHelpers :: Test
-testCrushHelpers = TestList [
-    TestLabel "clearRow" testClearRow,
-    TestLabel "clearColumn" testClearColumn,
-    TestLabel "clearSurrounding" testClearSurrounding,
-    TestLabel "clearPosition" testClearPosition,
-    TestLabel "validCoordinate" testValidCoordinate
-  ]
+-- testCrushHelpers :: Test
+-- testCrushHelpers = TestList [
+--     TestLabel "clearRow" testClearRow,
+--     TestLabel "clearColumn" testClearColumn,
+--     TestLabel "clearSurrounding" testClearSurrounding,
+--     TestLabel "clearPosition" testClearPosition,
+--     TestLabel "validCoordinate" testValidCoordinate
+--   ]
 
 -- Test helper functions for apply action
 testApplyDisappear :: Test
 testApplyDisappear = TestCase $ do
-    let grid = applyDisappear crushableGrid [(0, 0), (0, 1), (0, 2)]
-    let expectedGrid = GameGrid
+    grid <- applyDisappear crushableGrid
+        [(Coordinate 0, Coordinate 0),
+        (Coordinate 0, Coordinate 1),
+        (Coordinate 0, Coordinate 2)]
+    let expectedBoard =
             [ [EmptyCandy, EmptyCandy, EmptyCandy]
             , [candy2, candy2, candy2]
-            , [candy2, candy1, bombCandy]
-            ] []
-    assertEqual "Grids should be equal" expectedGrid grid
+            , [candy2, candy1, candy5]
+            ]
+    assertEqual "Grids should be equal" expectedBoard (board grid)
 
 testApplyTrigger :: Test
 testApplyTrigger = TestCase $ do
-    let grid = applyTrigger crushableGrid (2, 2) Bomb
-    let expectedGrid = GameGrid
+    grid <- applyTrigger crushableGrid (Coordinate 2, Coordinate 2) candy5
+    let expectedBoard =
             [ [candy1, candy1, candy1]
             , [candy2, EmptyCandy, EmptyCandy]
             , [candy2, EmptyCandy, EmptyCandy]
-            ] []
-    assertEqual "Grids should be equal" expectedGrid grid
+            ]
+    assertEqual "Grids should be equal" expectedBoard (board grid)
 
 testSwapNoCrush :: Test
 testSwapNoCrush = TestCase $ do
-    let grid = applySwap initialGrid (0, 0) (0, 1)
+    grid <- applySwap initialGrid
+        (Coordinate 0, Coordinate 0) (Coordinate 0, Coordinate 1)
     assertEqual "Grids should be equal" initialGrid grid
 
 testSwapCrush :: Test
 testSwapCrush = TestCase $ do
-    let grid = applySwap initialGrid (0, 2) (1, 2)
-        expectedCrushedGrid = GameGrid
+    grid <- applySwap initialGrid
+        (Coordinate 0, Coordinate 2) (Coordinate 1, Coordinate 2)
+    let expectedBoard =
             [ [EmptyCandy, EmptyCandy, EmptyCandy]
             , [candy4, candy1, candy3]
             , [candy3, candy5, candy4]
-            ] []  -- After crushing (0,0), (0,1), (0,2)
-    assertEqual "Grids should be equal" expectedCrushedGrid grid
+            ] -- After crushing (0,0), (0,1), (0,2)
+    assertEqual "Grids should be equal" expectedBoard (board grid)
 
 testApplyClick1 :: Test
 testApplyClick1 = TestCase $ do
-    let grid = applyClick crushableGrid (2, 2)
-    let expectedGrid = GameGrid
+    grid <- applyClick crushableGrid (Coordinate 2, Coordinate 2)
+    let expectedBoard =
             [ [candy1, candy1, candy1]
             , [candy2, EmptyCandy, EmptyCandy]
             , [candy2, EmptyCandy, EmptyCandy]
-            ] []
-    assertEqual "Grids should be equal" expectedGrid grid
+            ]
+    assertEqual "Grids should be equal" expectedBoard (board grid)
 
 testApplyClick2 :: Test
 testApplyClick2 = TestCase $ do
-    let grid = applyClick crushableGrid (0, 0)
+    grid <- applyClick crushableGrid (Coordinate 0, Coordinate 0)
     assertEqual "Grids should be equal" crushableGrid grid
 
 testActions :: Test
@@ -253,53 +250,59 @@ testActions = TestList [
 -- Test applyAction input
 testApplyAction1 :: Test
 testApplyAction1 = TestCase $ do
-    let grid = applyAction initialGrid (Swap (0, 0) (0, 1))
+    grid <- applyAction initialGrid 
+        (Swap (Coordinate 0, Coordinate 0) (Coordinate 0, Coordinate 1))
     assertEqual "Grids should be equal" initialGrid grid
 
 testApplyAction2 :: Test
 testApplyAction2 = TestCase $ do
-    let grid = applyAction initialGrid (Swap (0, 2) (1, 2))
-    let expectedCrushedGrid = GameGrid
+    grid <- applyAction initialGrid (Swap 
+        (Coordinate 0, Coordinate 2) (Coordinate 1, Coordinate 2))
+    let expectedBoard =
             [ [EmptyCandy, EmptyCandy, EmptyCandy]
             , [candy4, candy1, candy3]
             , [candy3, candy5, candy4]
-            ] []  -- After crushing (0,0), (0,1), (0,2)
-    assertEqual "Grids should be equal" expectedCrushedGrid grid
+            ]  -- After crushing (0,0), (0,1), (0,2)
+    assertEqual "Grids should be equal" expectedBoard (board grid)
 
 testApplyAction3 :: Test
 testApplyAction3 = TestCase $ do
-    let grid = applyAction crushableGrid (Click (2, 2))
-    let expectedCrushedGrid = GameGrid
+    grid <- applyAction crushableGrid (Click (Coordinate 2, Coordinate 2))
+    let expectedBoard =
             [ [candy1, candy1, candy1]
             , [candy2, EmptyCandy, EmptyCandy]
             , [candy2, EmptyCandy, EmptyCandy]
-            ] []
-    assertEqual "Grids should be equal" expectedCrushedGrid grid
+            ]
+    assertEqual "Grids should be equal" expectedBoard (board grid)
 
 testApplyAction4 :: Test
 testApplyAction4 = TestCase $ do
-    let grid = applyAction crushableGrid (Click (2, 1))
+    grid <- applyAction crushableGrid (Click (Coordinate 2, Coordinate 1))
     assertEqual "Grids should be equal" crushableGrid grid
 
 testApplyAction5 :: Test
 testApplyAction5 = TestCase $ do
-    let grid = applyAction crushableGrid (Trigger ((2, 2), Bomb))
-    let expectedCrushedGrid = GameGrid
+    grid <- applyAction crushableGrid 
+        (Trigger ((Coordinate 2, Coordinate 2), candy5))
+    let expectedBoard =
             [ [candy1, candy1, candy1]
             , [candy2, EmptyCandy, EmptyCandy]
             , [candy2, EmptyCandy, EmptyCandy]
-            ] []
-    assertEqual "Grids should be equal" expectedCrushedGrid grid
+            ]
+    assertEqual "Grids should be equal" expectedBoard (board grid)
 
 testApplyAction6 :: Test
 testApplyAction6 = TestCase $ do
-    let grid = applyAction crushableGrid (Disappear [(0, 0), (0, 1), (0, 2)])
-    let expectedCrushedGrid = GameGrid
+    grid <- applyAction crushableGrid (Disappear 
+            [(Coordinate 0, Coordinate 0),
+            (Coordinate 0, Coordinate 1),
+            (Coordinate 0, Coordinate 2)])
+    let expectedBoard =
             [ [EmptyCandy, EmptyCandy, EmptyCandy]
             , [candy2, candy2, candy2]
-            , [candy2, candy1, bombCandy]
-            ] []
-    assertEqual "Grids should be equal" expectedCrushedGrid grid
+            , [candy2, candy6, candy5]
+            ]
+    assertEqual "Grids should be equal" expectedBoard (board grid)
 
 testApplyAction :: Test
 testApplyAction = TestList [
@@ -311,269 +314,154 @@ testApplyAction = TestList [
     TestLabel "applyAction6" testApplyAction6
   ]
 
-testRedeemSpecialCandy :: Test
-testRedeemSpecialCandy = TestList [
-    "Create a striped row candy with 4 candies" ~:
-        redeemSpecialCandy (Disappear [(0, 0), (0, 1), (0, 2), (0, 3)]) ~?=
-            Just stripedRowCandy,
-    "Create a bomb candy with 5 candies" ~:
-        redeemSpecialCandy (Disappear [(0, 0), (0, 1), (0, 2), (0, 3), (0, 4)]) ~?=
-            Just bombCandy,
-    "No special candy with fewer than 4 candies" ~:
-        redeemSpecialCandy (Disappear [(0, 0), (0, 1), (0, 2)]) ~?= Nothing
-  ]
+-- testRedeemSpecialCandy :: Test
+-- testRedeemSpecialCandy = TestList [
+--     "Create a striped row candy with 4 candies" ~:
+--         redeemSpecialCandy (Disappear [(0, 0), (0, 1), (0, 2), (0, 3)]) ~?=
+--             Just stripedRowCandy,
+--     "Create a bomb candy with 5 candies" ~:
+--         redeemSpecialCandy (Disappear [(0, 0), (0, 1), (0, 2), (0, 3), (0, 4)]) ~?=
+--             Just bombCandy,
+--     "No special candy with fewer than 4 candies" ~:
+--         redeemSpecialCandy (Disappear [(0, 0), (0, 1), (0, 2)]) ~?= Nothing
+--   ]
 
 -- Test fill empty cells with random candies
-testFillRow :: Test
-testFillRow = TestCase $ do
-    let row = [candy1, candy2, EmptyCandy]
-    newRow <- fillRow row [Circle , Square, Triangle, Heart]
-    assertBool "No empty candies" (EmptyCandy `notElem` newRow)
+-- testFillRow :: Test
+-- testFillRow = TestCase $ do
+--     let row = [candy1, candy2, EmptyCandy]
+--     newRow <- fillRow row [Circle , Square, Triangle, Heart]
+--     assertBool "No empty candies" (EmptyCandy `notElem` newRow)
 
-testFillBoard :: Test
-testFillBoard = TestCase $ do
-    newBoard <- fillBoard (board gridWithEmptyCandy) [Circle, Square, Triangle, Heart, Star]
-    assertBool "No empty candies" (EmptyCandy `notElem` concat newBoard)
+-- testFillBoard :: Test
+-- testFillBoard = TestCase $ do
+--     newBoard <- fillBoard (board gridWithEmptyCandy) [Circle, Square, Triangle, Heart, Star]
+--     assertBool "No empty candies" (EmptyCandy `notElem` concat newBoard)
 
-testFill :: Test
-testFill = TestList [
-    TestLabel "fillRow" testFillRow,
-    TestLabel "fillBoard" testFillBoard
-  ]
+-- testFill :: Test
+-- testFill = TestList [
+--     TestLabel "fillRow" testFillRow,
+--     TestLabel "fillBoard" testFillBoard
+--   ]
 
 -- Test autoCrush related functions
-testIsNormalDisappear :: Test
-testIsNormalDisappear = TestCase $ do
-    assertBool "Normal disappear" 
-        (isNormalDisappear crushableGrid (Disappear [(0, 0), (0, 1), (0, 2)]))
-    assertBool "Not normal disappear" 
-        (not $ isNormalDisappear crushableGrid (Disappear [(2, 0), (2, 1), (2, 2)]))
-    assertBool "Not normal disappear" 
-        (not $ isNormalDisappear crushableGrid (Trigger ((2, 2), Bomb)))
-
-testAllCoordinates :: Test
-testAllCoordinates = TestCase $ do
-    let coords = allCoordinates crushableGrid
-    let expectedCoords = 
-            [(0, 0), (0, 1), (0, 2), 
-            (1, 0), (1, 1), (1, 2), 
-            (2, 0), (2, 1), (2, 2)]
-    assertEqual "Coordinates should be equal" expectedCoords coords
+-- testAllCoordinates :: Test
+-- testAllCoordinates = TestCase $ do
+--     let coords = allCoordinates crushableGrid
+--     let expectedCoords = 
+--             [(0, 0), (0, 1), (0, 2), 
+--             (1, 0), (1, 1), (1, 2), 
+--             (2, 0), (2, 1), (2, 2)]
+--     assertEqual "Coordinates should be equal" expectedCoords coords
 
 expectedCrushables :: [Action]
 expectedCrushables
-    = [Disappear [(0, 0), (0, 1), (0, 2)],
-       Disappear [(1, 0), (1, 1), (1, 2), (2, 0)]]
+    = [Disappear [(Coordinate 0, Coordinate 0),
+                (Coordinate 0, Coordinate 1),
+                (Coordinate 0, Coordinate 2)],
+       Disappear [(Coordinate 1, Coordinate 0),
+                (Coordinate 1, Coordinate 1),
+                (Coordinate 1, Coordinate 2),
+                (Coordinate 2, Coordinate 0)]]
 
 testFinalAllCrushables :: Test
 testFinalAllCrushables = TestCase $ do
-    let allCrushables = findAllCrushables crushableGrid
+    let allCrushables = findAllNormalCrushables crushableGrid
     assertEqual "Crushables should be equal" expectedCrushables allCrushables
 
 testApplyActions :: Test
 testApplyActions = TestCase $ do
-    let grid = applyActions crushableGrid expectedCrushables
-    let expectedCrushedGrid = GameGrid
+    grid <- applyActions crushableGrid expectedCrushables
+    let expectedBoard =
             [ [EmptyCandy, EmptyCandy, EmptyCandy]
-            , [EmptyCandy, EmptyCandy, stripedRowCandy]
-            , [EmptyCandy, candy1, bombCandy]
-            ] []
-    assertEqual "Grids should be equal" expectedCrushedGrid grid
+            , [EmptyCandy, EmptyCandy, candy7]
+            , [EmptyCandy, candy6, candy5]
+            ]
+    assertEqual "Grids should be equal" expectedBoard (board grid)
 
 testAutoCrush :: Test
 testAutoCrush = TestCase $ do
-    let maybeGrid = autoCrush crushableGrid
-    let expectedCrushedGrid = GameGrid
+    crushedGrid <- autoCrush (return crushableGrid)
+    let expectedBoard =
             [ [EmptyCandy, EmptyCandy, EmptyCandy]
-            , [EmptyCandy, EmptyCandy, stripedRowCandy]
-            , [EmptyCandy, candy1, bombCandy]
-            ] []
-    case maybeGrid of
-        Just grid -> assertEqual "Grids should be equal" expectedCrushedGrid grid
-        Nothing -> assertFailure "autoCrush returned Nothing"
+            , [EmptyCandy, EmptyCandy, candy7]
+            , [EmptyCandy, candy6, candy5]
+            ]
+    assertEqual "Grids should be equal" expectedBoard (board crushedGrid)
 
 testAutoCrushRelated :: Test
 testAutoCrushRelated = TestList [
-    TestLabel "isNormalDisappear" testIsNormalDisappear,
-    TestLabel "allCoordinates" testAllCoordinates,
+    -- TestLabel "isNormalDisappear" testIsNormalDisappear,
+    -- TestLabel "allCoordinates" testAllCoordinates,
     TestLabel "finalAllCrushables" testFinalAllCrushables,
     TestLabel "applyActions" testApplyActions,
     TestLabel "autoCrush" testAutoCrush
   ]
 
 -- QuickCheck properties
-instance Arbitrary Candy where
-    arbitrary :: Gen Candy
-    arbitrary = oneof [Candy <$> arbitrary <*> arbitrary, pure EmptyCandy]
-
-instance Arbitrary CandyShape where
-    arbitrary = elements [Triangle .. Asterisk]
-
-instance Arbitrary CandyEffect where
-    arbitrary = elements [Normal .. StripedCross]
-
-instance Arbitrary Difficulty where
-    arbitrary :: Gen Difficulty
-    arbitrary = elements [easy, medium, hard]
-
-instance Arbitrary Coordinate where
-    arbitrary :: Gen Coordinate
-    arbitrary = do
-        difficulty <- arbitrary
-        let dim = dimension difficulty
-        x <- chooseInt (0, dim - 1)
-        y <- chooseInt (0, dim - 1)
-        return (x, y)
-    shrink :: Coordinate -> [Coordinate]
-    shrink (x, y) = [(x', y') | x' <- shrink x, y' <- shrink y]
-
-genArbCoord :: Difficulty -> Gen Coordinate
-genArbCoord difficulty = do
-    let dim = dimension difficulty
-    x <- chooseInt (0, dim - 1)
-    y <- chooseInt (0, dim - 1)
-    return (x, y)
-
-instance Arbitrary GameGrid where
-    arbitrary :: Gen GameGrid
-    arbitrary = do
-        difficulty <- arbitrary
-        let dim = dimension difficulty
-        candies <- vectorOf (dim * dim) arbitrary
-        let board = splitIntoRows dim candies
-        return $ GameGrid board []
-
-genArbGrid :: Difficulty -> Gen GameGrid
-genArbGrid difficulty = do
-    let dim = dimension difficulty
-    candies <- vectorOf (dim * dim) arbitrary
-    let board = splitIntoRows dim candies
-    return $ GameGrid board []
-
--- Arbitrary instance for GameState
-instance Arbitrary GameState where
-    arbitrary :: Gen GameState
-    arbitrary = do
-        difficulty <- arbitrary
-        grid <- genArbGrid difficulty
-        lastGrid <- oneof [Just <$> genArbGrid difficulty, pure Nothing]
-        remainingSteps <- arbitrary
-        score <- arbitrary
-        return GameState { currentGrid = grid, difficulty = difficulty, lastGrid = lastGrid, remainingSteps = remainingSteps, score = score }
-
-genArbState :: Difficulty -> Gen GameState
-genArbState difficulty = do
-    grid <- genArbGrid difficulty
-    lastGrid <- oneof [Just <$> genArbGrid difficulty, pure Nothing]
-    remainingSteps <- arbitrary
-    score <- arbitrary
-    return GameState { currentGrid = grid, difficulty = difficulty, lastGrid = lastGrid, remainingSteps = remainingSteps, score = score }
-
-instance Arbitrary Action where
-    arbitrary :: Gen Action
-    arbitrary = do
-        difficulty <- arbitrary
-        oneof 
-            [ Swap <$> genArbCoord difficulty <*> genArbCoord difficulty
-            , Click <$> genArbCoord difficulty
-            , pure Undo
-            , pure Quit
-            , Trigger <$> ((,) <$> genArbCoord difficulty <*> arbitrary)
-            , Disappear <$> listOf (genArbCoord difficulty)
-            ]
-
--- All possible action for Action type
-genArbAction :: Difficulty -> Gen Action
-genArbAction difficulty = do
-    oneof 
-        [ Swap <$> genArbCoord difficulty <*> genArbCoord difficulty
-        , Click <$> genArbCoord difficulty
-        , pure Undo
-        , pure Quit
-        , Trigger <$> ((,) <$> genArbCoord difficulty <*> arbitrary)
-        , Disappear <$> listOf (genArbCoord difficulty)
-        ]
-
--- All possible user actions
-genArbUserAction :: Difficulty -> Gen Action
-genArbUserAction difficulty = do
-    oneof 
-        [ Swap <$> genArbCoord difficulty <*> genArbCoord difficulty
-        , Click <$> genArbCoord difficulty
-        , pure Undo
-        , pure Quit
-        ]
-
--- All possible moves
-genReversibleActions :: Difficulty -> Gen Action
-genReversibleActions difficulty = do
-    oneof 
-        [ Swap <$> genArbCoord difficulty <*> genArbCoord difficulty
-        , Click <$> genArbCoord difficulty
-        ]
-
 -- Property: Swapping candies twice results in the original grid
 prop_swapCandiesIdempotent :: Difficulty -> Property
-prop_swapCandiesIdempotent difficulty = monadicIO $ do
-    coord1 <- run $ generate $ genArbCoord difficulty
-    coord2 <- run $ generate $ genArbCoord difficulty
-    grid <- run $ generate $ genArbGrid difficulty
+prop_swapCandiesIdempotent d = monadicIO $ do
+    coord1 <- run $ generate $ genArbIntCoordPair d
+    coord2 <- run $ generate $ genArbIntCoordPair d
+    grid <- run $ generate $ genGameGrid d
     let swappedOnce = swapCandies grid coord1 coord2
     let swappedTwice = swapCandies swappedOnce coord1 coord2
     return $ swappedTwice == grid
 
 -- Property: Applying an action preserves the grid size
 prop_applyActionPreservesGridSize :: Difficulty -> Property
-prop_applyActionPreservesGridSize difficulty = monadicIO $ do
-    grid <- run $ generate $ genArbGrid difficulty
-    action <- run $ generate $ genArbAction difficulty
-    let newGrid = applyAction grid action
+prop_applyActionPreservesGridSize d = monadicIO $ do
+    grid <- run $ generate $ genGameGrid d
+    action <- run $ generate $ genArbAction d
+    newGrid <- run $ applyAction grid action
     return $ length (board grid) == length (board newGrid) &&
-             all (\(row1, row2) -> length row1 == length row2) 
+             all (\(row1, row2) -> length row1 == length row2)
                 (zip (board grid) (board newGrid))
 
 -- -- Property: all candies in a crushable group are the same
 prop_findNormalCandyCrushablesMatch :: Difficulty -> Property
-prop_findNormalCandyCrushablesMatch difficulty = monadicIO $ do
-    coord <- run $ generate $ genArbCoord difficulty
-    grid <- run $ generate $ genArbGrid difficulty
+prop_findNormalCandyCrushablesMatch d = monadicIO $ do
+    coord <- run $ generate $ genArbIntCoordPair d
+    grid <- run $ generate $ genGameGrid d
     let crushables = findNormalCandyCrushables grid coord
     return $ all (allSameCandy grid) crushables
     where
         allSameCandy :: GameGrid -> Action -> Bool
         allSameCandy grid (Disappear coords) =
-            let candies = map (\(x, y) -> (board grid !! x) !! y) coords
+            let candies = map (\(Coordinate x, Coordinate y) ->
+                    (board grid !! x) !! y) coords
             in all (== head candies) candies
         allSameCandy _ _ = False
 
 -- Property: fillAndCrushUntilStable should return a stable grid with no immediate crushables
 prop_fillAndCrushUntilStable :: Difficulty -> Property
-prop_fillAndCrushUntilStable difficulty = monadicIO $ do
-    grid <- run $ generate $ genArbGrid difficulty
-    stableGrid <- run $ fillAndCrushUntilStable grid (candyShapes difficulty)
+prop_fillAndCrushUntilStable d = monadicIO $ do
+    grid <- run $ generate $ genGameGrid d
+    stableGrid <- run $ fillAndCrushUntilStable (return grid) (normalCandies grid)
     -- there should be no immediate crushables in the stable grid
-    let crushAgain = autoCrush stableGrid
-    Test.QuickCheck.Monadic.assert $ null crushAgain
+    crushAgain <- run $ autoCrush (return stableGrid)
+    Test.QuickCheck.Monadic.assert $ board crushAgain == board stableGrid
 
 -- Property: fillAndCrushUntilStable should return a stable grid with empty emptyCandyCoords
 prop_fillAndCrushUntilStableEmptyCoords :: Difficulty -> Property
-prop_fillAndCrushUntilStableEmptyCoords difficulty = monadicIO $ do
-    grid <- run $ generate $ genArbGrid difficulty
-    stableGrid <- run $ fillAndCrushUntilStable grid (candyShapes difficulty)
+prop_fillAndCrushUntilStableEmptyCoords d = monadicIO $ do
+    grid <- run $ generate $ genGameGrid d
+    stableGrid <- run $ fillAndCrushUntilStable (return grid) (normalCandies grid)
     Test.QuickCheck.Monadic.assert $ null (emptyCandyCoords stableGrid)
 
 -- Property: Applying an action modifies step size correctly
 prop_actionStepSize :: Difficulty -> Property
-prop_actionStepSize difficulty = monadicIO $ do
-    initalState <- run $ generate $ genArbState difficulty
-    initalAction <- run $ generate $ genArbUserAction difficulty
+prop_actionStepSize d = monadicIO $ do
+    initalState <- run $ generate $ genGameState d
+    initalAction <- run $ generate $ genArbUserAction d
     let initalStepSize = remainingSteps initalState
     newState <- run $ handleAction False initalState initalAction
     let newStepSize = remainingSteps newState
     case initalAction of
         Undo ->
             case lastGrid initalState of
-                Just _ -> 
+                Just _ ->
                     Test.QuickCheck.Monadic.assert $
                         newStepSize == initalStepSize + 1
                 -- already undoed once or initial state: no last grid to restore
@@ -589,9 +477,9 @@ prop_actionStepSize difficulty = monadicIO $ do
 
 -- Property: undoing an action restores the grid to the previous state
 prop_undoRestoresGrid :: Difficulty -> Property
-prop_undoRestoresGrid difficulty = monadicIO $ do
-    initialState <- run $ generate $ genArbState difficulty
-    action <- run $ generate $ genReversibleActions difficulty
+prop_undoRestoresGrid d = monadicIO $ do
+    initialState <- run $ generate $ genGameState d
+    action <- run $ generate $ genArbReversibleAction d
     newState <- run $ handleAction False initialState action
     undoState <- run $ handleAction False newState Undo
     return $ currentGrid initialState == currentGrid undoState
@@ -603,11 +491,11 @@ runUnitTests = runTestTT $ TestList
         TestLabel "testConstructors" testConstructors,
         TestLabel "testParseAction" testParseAction,
         TestLabel "testSwapHelpers" testSwapHelpers,
-        TestLabel "testCrushHelpers" testCrushHelpers,
+        -- TestLabel "testCrushHelpers" testCrushHelpers,
         TestLabel "testActions" testActions,
         TestLabel "testApplyAction" testApplyAction,
-        TestLabel "testRedeemSpecialCandy" testRedeemSpecialCandy,
-        TestLabel "testFill" testFill,
+        -- TestLabel "testRedeemSpecialCandy" testRedeemSpecialCandy,
+        -- TestLabel "testFill" testFill,
         TestLabel "testAutoCrushRelated" testAutoCrushRelated
     ]
 

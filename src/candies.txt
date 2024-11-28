@@ -24,6 +24,7 @@
 // - If `width = 1`: Includes all positions in the current row. Equivalent to `Arbitrary [(0, :)]`.
 // - If `width` is even: Expands equally to both sides but includes one extra row upward.
 // - If `width` is odd: Expands symmetrically above and below the current row.
+// - Same logic applies to `height` in the vertical direction. (Even height includes one extra column to the left.)
 // Example: For `width = 3, height = 2`, the range includes rows `[x-1, x]` and columns `[y-1, y, y+1]`.
 //
 // # Diamond

@@ -2,10 +2,11 @@ import Test.HUnit
 import Test.QuickCheck
 
 import Lib
-import qualified CandyTest
-import qualified GameGridTest
-import qualified GameUtilsTest
-import qualified GameControllerTest
+import CandyTest
+import GameGridTest
+import GameUtilsTest
+import GameControllerTest
+import TestUtils
 
 
 main :: IO ()

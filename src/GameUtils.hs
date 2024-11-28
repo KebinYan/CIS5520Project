@@ -4,60 +4,172 @@ import Candy
 import GHC.Base (error)
 import System.Random
 import Control.Monad (replicateM)
+import Data.Map (Map, insertWith, empty, lookup)
+import qualified Data.Set as Set
 
 -- Generate a random Candy based on a provided list of CandyShape
 -- | candyShapes: the list of available CandyShape
 generateRandomCandy :: [Candy] -> IO Candy
-generateRandomCandy candys = do
-    candyShapes <- mapM (return . (shapeName . candy)) candys
-    candySymbols <- mapM (return . (shapeIcon . candy)) candys
-    randomIndex <- randomRIO (0, length candyShapes - 1)
-    return Candy {
-        candyDef = candyDef candys !! randomIndex,
-        candyEffect = normalEffect
-    }
+generateRandomCandy [] = error "No candies available"
+generateRandomCandy candies = do
+    randomIndex <- randomRIO (0, length candies - 1)
+    return (candies !! randomIndex)
 
 -- Generate a list of random candies based on a provided list of CandyShape
 -- | len: the number of candies to generate
 -- | candyShapes: the list of available CandyShape
 generateRandomCandyList :: Int -> [Candy] -> IO [Candy]
-generateRandomCandyList len candys =
-    replicateM len (generateRandomCandy candys)
+generateRandomCandyList len candies =
+    replicateM len (generateRandomCandy candies)
 
 -- Generate the special effect for a special candy based on the special effect range
 generateSpecialEffect :: Candy -> (CoordinatePair -> [[Candy]] -> [[Candy]])
-generateSpecialEffect candy
-    | effectName (candyEffect candy) == "Circle" = generateCircleEffect candy
-    | effectName (candyEffect candy) == "Rectangle" = generateRectangleEffect candy
-    | effectName (candyEffect candy) == "Diamond" = generateDiamondEffect candy
-    | effectName (candyEffect candy) == "Arbitrary" = generateArbitraryEffect candy
-    | otherwise = error "Invalid special effect"
+generateSpecialEffect candy coord board =
+    case coord of
+        (Coordinate x, Coordinate y) ->
+            let positionsToClear = case effectRange (candyEffect candy) of
+                    Circle r ->
+                        computeCirclePositions (x, y) r
+                    Rectangle w h->
+                        computeRectanglePositions (x, y) w h
+                    Diamond r ->
+                        computeDiamondPositions (x, y) r
+                    Arbitrary coords ->
+                        computeArbitraryPositions
+                            (length board, length (head board)) (x, y) coords
+            in foldl clearPosition board positionsToClear
+        _ -> error "Invalid candy coordinate"
 
--- Clear a row of candies
-clearRow :: Int -> [[Candy]] -> [[Candy]]
-clearRow x grid =
-    [if rowIdx == x then replicate (length row) emptyCandy else row
-        | (rowIdx, row) <- zip [0..] grid]
+-- Compute the positions to clear for a circle effect
+computeCirclePositions :: (Int, Int) -> Int -> [CoordinatePair]
+computeCirclePositions (x, y) r =
+    [ (Coordinate (x + dx), Coordinate (y + dy)) |
+        dx <- [-r..r], dy <- [-r..r], dx * dx + dy * dy <= r * r]
 
--- Clear a column of candies
-clearColumn :: Int -> [[Candy]] -> [[Candy]]
-clearColumn y grid =
-    [ [if colIdx == y then emptyCandy else candy
-        | (colIdx, candy) <- zip [0..] row] | row <- grid ]
+-- Compute the positions to clear for a rectangle effect
+computeRectanglePositions :: (Int, Int) -> Int -> Int -> [CoordinatePair]
+computeRectanglePositions (x, y) w h =
+    let halfW = w `div` 2
+        halfH = h `div` 2
+        widthRange = if odd w then [-halfW..halfW - 1] else [-halfW..halfW]
+        heightRange = if odd h then [-halfH..halfH - 1] else [-halfH..halfH]
+    in [ (Coordinate (x + dx), Coordinate (y + dy)) |
+        dx <- widthRange, dy <- heightRange]
 
--- Clear candies in a 3x3 grid around a given coordinate
-clearSurrounding :: [[Candy]] -> CoordinatePair -> [[Candy]]
-clearSurrounding grid (x, y) =
-    let positionsToClear = [(x + dx, y + dy) | dx <- [-1..1], dy <- [-1..1]]
-    in foldl clearPosition grid positionsToClear
+-- Compute the positions to clear for a diamond effect
+computeDiamondPositions :: (Int, Int) -> Int -> [CoordinatePair]
+computeDiamondPositions (x, y) r =
+    [ (Coordinate (x + dx), Coordinate (y + dy)) |
+        dx <- [-r..r], dy <- [-r..r], abs dx + abs dy <= r]
+
+-- Compute the positions to clear for a arbitrary effect
+-- Parameters:
+-- | (nRows, nCols): the dimension of the board
+-- | (x, y): the coordinate of the special candy
+-- | coords: the list of coordinates to clear
+computeArbitraryPositions :: (Int, Int) -> (Int, Int) -> [CoordinatePair] -> [CoordinatePair]
+computeArbitraryPositions (nRows, nCols) (x, y) =
+    Set.toList . foldl
+        (\acc coord -> expandCoords (nRows, nCols) (x, y) coord `Set.union` acc) Set.empty
+    where
+        expandCoords :: (Int, Int) -> (Int, Int) -> CoordinatePair -> Set.Set CoordinatePair
+        expandCoords (nRows, nCols) (x, y) (Coordinate dx, Coordinate dy) =
+            Set.singleton (Coordinate (x + dx), Coordinate (y + dy))
+        expandCoords (nRows, nCols) (x, y) (All, Coordinate dy) =
+            Set.fromList [(Coordinate row , Coordinate (y + dy)) | row <- [0..nCols - 1]]
+        expandCoords (nRows, nCols) (x, y) (Coordinate dx, All) =
+            Set.fromList [(Coordinate (x + dx), Coordinate col) | col <- [0..nRows - 1]]
+        expandCoords (nRows, nCols) (x, y) (All, All) =
+            Set.fromList [(Coordinate row, Coordinate col)
+                | row <- [0..nCols - 1], col <- [0..nRows - 1]]
 
 -- Clear a candy at a given coordinate
 clearPosition :: [[Candy]] -> CoordinatePair -> [[Candy]]
-clearPosition board (x, y) = setCandyAt board (x, y) EmptyCandy
+clearPosition board (Coordinate x, Coordinate y) =
+    setCandyAt board (Coordinate x, Coordinate y) EmptyCandy
+clearPosition board _ = board
 
 -- Check if a coordinate is valid
-validCoordinate :: GameGrid -> CoordinatePair -> Bool
-validCoordinate (GameGrid board _ _) (x, y) =
+validCoordinate :: [[Candy]] -> CoordinatePair -> Bool
+validCoordinate board (Coordinate x, Coordinate y) =
     not (null board)
     && x >= 0 && x < length board
     && y >= 0 && y < length (head board)
+validCoordinate _ (_, _) = False
+
+-- List all coordinates in the board
+allCoordinates :: [[Candy]] -> [CoordinatePair]
+allCoordinates board =
+    [ (Coordinate x, Coordinate y)
+        | x <- [0..length board - 1], y <- [0..length (head board) - 1]]
+
+-- get candy at a specific position
+getCandyAt :: [[Candy]] -> CoordinatePair -> Maybe Candy
+getCandyAt board (Coordinate x, Coordinate y) =
+    if validCoordinate board (Coordinate x, Coordinate y)
+    then Just (board !! x !! y)
+    else Nothing
+getCandyAt _ (_, _) = Nothing
+
+-- set candy at a specific position
+setCandyAt :: [[Candy]] -> CoordinatePair -> Candy -> [[Candy]]
+setCandyAt board (Coordinate x, Coordinate y) newCandy =
+    if validCoordinate board (Coordinate x, Coordinate y)
+    then
+        let (before, row:after) = splitAt x board
+            (left, _:right) = splitAt y row
+            newRow = left ++ [newCandy] ++ right
+        in before ++ [newRow] ++ after
+    else board
+setCandyAt board _ _ = board
+
+-- Extract normal candies from a candies list
+extractNormalCandies :: [Candy] -> [Candy]
+extractNormalCandies = filter (\candy ->
+    effectName (candyEffect candy) == "Normal")
+
+-- Extract special candies from a candies list
+extractSpecialCandies :: [Candy] -> Map Int [Candy]
+extractSpecialCandies = foldr extractSpecialCandy Data.Map.empty
+    where
+        extractSpecialCandy candy acc =
+            let req = effectRequirement (candyEffect candy)
+            in case req of
+                Requirement Eq 0 -> acc
+                Requirement Eq n -> Data.Map.insertWith (++) n [candy] acc
+                _ -> acc
+
+-- | Reedem a special candy based on the number of candies in the list
+redeemSpecialCandy :: [CoordinatePair] -> Map Int [Candy] -> IO (Maybe Candy)
+redeemSpecialCandy coords specialCandies =
+    let n = length coords
+    in case n of
+        0 -> return Nothing
+        n -> case Data.Map.lookup n specialCandies of
+            Just candies -> generateRandomCandy candies >>= return . Just
+            Nothing -> return Nothing
+
+candyToSymbol :: Candy -> String
+candyToSymbol EmptyCandy = " "
+candyToSymbol candy = 
+    let (shape, color) = case effectName (candyEffect candy) of
+            "Normal" -> (shapeIcon (candyDef candy), "\ESC[30m")
+            _ -> (shapeIcon (candyDef candy), "\ESC[91m")
+    in shape ++ color ++ "\ESC[0m"
+
+-- Fill the entire board row by row
+fillBoard :: IO [[Candy]] -> [Candy] -> IO [[Candy]]
+fillBoard ioRows candies
+    | null candies = error "No candies available"
+    | otherwise = do
+        rows <- ioRows
+        mapM (`fillRow` candies) rows
+
+-- Fill a single row, handling empty candies
+fillRow :: [Candy] -> [Candy] -> IO [Candy]
+fillRow row candies 
+    | null candies = error "No candies available"
+    | otherwise = mapM (\candy -> 
+        if candy == EmptyCandy
+        then generateRandomCandy candies
+        else return candy) row

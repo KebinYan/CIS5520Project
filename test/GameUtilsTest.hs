@@ -2,59 +2,268 @@ module GameUtilsTest where
 import Test.HUnit
 import Test.QuickCheck
 import Test.QuickCheck.Monadic
+import TestUtils
+import Data.List
+import Data.Maybe
 
 import GameUtils
+import GameState
 import Candy
 
 -- Unit test for generateRandomCandy
 testGenerateRandomCandy :: Test
 testGenerateRandomCandy = TestCase $ do
-    let candyShapes = [Triangle, Circle, Square]
-    candy <- generateRandomCandy candyShapes
-    assertBool "Generated candy shape is within the provided list" (candyShape candy `elem` candyShapes)
-    assertEqual "Generated candy effect is Normal" Normal (candyEffect candy)
+    let candies = [candy1, candy2, candy3, candy4]
+    candy <- generateRandomCandy candies
+    let candyShapes = map (shapeName . candyDef) candies
+    assertBool "Generated candy shape is within the provided list"
+        (shapeName (candyDef candy) `elem` candyShapes)
+    assertEqual "Generated candy effect is Normal"
+        "Normal" (effectName (candyEffect candy))
 
 -- Unit test for generateRandomCandyList
 testGenerateRandomCandyList :: Test
 testGenerateRandomCandyList = TestCase $ do
-    let candyShapes = [Triangle, Circle, Square]
-    candies <- generateRandomCandyList 10 candyShapes
-    assertEqual "Correct number of candies generated" 10 (length candies)
-    assertBool "All candy shapes are within the provided list" (all ((`elem` candyShapes) . candyShape) candies)
-    assertBool "All candy effects are Normal" (all ((== Normal) . candyEffect) candies)
+    let candies = [candy1, candy2, candy3, candy4]
+    generatedCandies <- generateRandomCandyList 10 candies
+    let candyShapes = map (shapeName . candyDef) candies
+    assertEqual "Correct number of candies generated" 10 (length generatedCandies)
+    assertBool "All candy shapes are within the provided list"
+        (all ((`elem` candyShapes) . shapeName . candyDef) generatedCandies)
+    assertBool "All candy effects are Normal"
+        (all ((== "Normal") . effectName . candyEffect) generatedCandies)
 
--- Arbitrary instance for CandyShape
-instance Arbitrary CandyShape where
-    arbitrary :: Gen CandyShape
-    arbitrary = elements [Triangle, Circle, Square]
+-- Unit test for generateSpecialEffect
+test_computeCirclePositions :: Test
+test_computeCirclePositions = TestCase $ do
+    let positions = computeCirclePositions (2, 2) 1
+        expected = sort [
+            (Coordinate 1, Coordinate 2),
+            (Coordinate 2, Coordinate 1),
+            (Coordinate 2, Coordinate 2),
+            (Coordinate 2, Coordinate 3),
+            (Coordinate 3, Coordinate 2)]
+    assertEqual "computeCirclePositions" (sort positions) expected
 
--- Property: Generated candy shape should be in the input list
-prop_generateRandomCandy :: [CandyShape] -> Property
-prop_generateRandomCandy candyShapes =
-    not (null candyShapes) ==>
-    monadicIO $ do
-        candy <- run $ generateRandomCandy candyShapes
-        Test.QuickCheck.Monadic.assert $ candyShape candy `elem` candyShapes
+test_computeRectanglePositions :: Test
+test_computeRectanglePositions = TestCase $ do
+    let positions = computeRectanglePositions (2, 2) 3 2
+        expected = sort [
+            (Coordinate 1, Coordinate 1),
+            (Coordinate 1, Coordinate 2),
+            (Coordinate 1, Coordinate 3),
+            (Coordinate 2, Coordinate 1),
+            (Coordinate 2, Coordinate 2),
+            (Coordinate 2, Coordinate 3)]
+    assertEqual "computeRectanglePositions" (sort positions) expected
 
--- Property: Generated list of candies should have correct length and valid shapes
-prop_generateRandomCandyList :: Positive Int -> [CandyShape] -> Property
-prop_generateRandomCandyList (Positive len) candyShapes =
-    not (null candyShapes) ==>
-    monadicIO $ do
-        candies <- run $ generateRandomCandyList len candyShapes
-        Test.QuickCheck.Monadic.assert $ length candies == len
-        Test.QuickCheck.Monadic.assert $ all ((`elem` candyShapes) . candyShape) candies
+test_computeDiamondPositions :: Test
+test_computeDiamondPositions = TestCase $ do
+    let positions = computeDiamondPositions (2, 2) 1
+        expected = sort [
+            (Coordinate 2, Coordinate 2),
+            (Coordinate 1, Coordinate 2),
+            (Coordinate 2, Coordinate 1),
+            (Coordinate 2, Coordinate 3),
+            (Coordinate 3, Coordinate 2)]
+    assertEqual "computeDiamondPositions" (sort positions) expected
 
+test_computeArbitraryPositions :: Test
+test_computeArbitraryPositions = TestCase $ do
+    let boardSize = (3, 3)
+        positions = computeArbitraryPositions boardSize (2, 1) [(Coordinate 0, All), (All, Coordinate 0)]
+        expected = sort [
+            (Coordinate 0, Coordinate 1),
+            (Coordinate 1, Coordinate 1),
+            (Coordinate 2, Coordinate 0),
+            (Coordinate 2, Coordinate 1),
+            (Coordinate 2, Coordinate 2)]
+    assertEqual "computeArbitraryPositions" (sort positions) expected
 
+test_generateSpecialEffect1 :: Test
+test_generateSpecialEffect1 = TestCase $ do
+    let testBoard = board crushableGrid
+        coord = (Coordinate 2, Coordinate 2)
+        newBoard = generateSpecialEffect candy5 coord testBoard
+    let positionsCleared = computeRectanglePositions (2, 2) 3 3
+        candiesAtClearedPositions = map (getCandyAt newBoard) positionsCleared
+    assertBool "generateSpecialEffect - bomb" $
+        all (== Just EmptyCandy) candiesAtClearedPositions
+
+test_generateSpecialEffect2 :: Test
+test_generateSpecialEffect2 = TestCase $ do
+    let testBoard = board crushableGrid
+        coord = (Coordinate 2, Coordinate 1)
+        newBoard = generateSpecialEffect candy6 coord testBoard
+    let positionsCleared = computeArbitraryPositions (3, 3) (2, 1) [(Coordinate 0, All), (All, Coordinate 0)]
+        candiesAtClearedPositions = map (getCandyAt newBoard) positionsCleared
+    assertBool "generateSpecialEffect - cross" $
+        all (== Just EmptyCandy) candiesAtClearedPositions
+
+testGetCandyAt :: Test
+testGetCandyAt = TestCase $ do
+    assertEqual "Get valid candy" (Just candy2) (getCandyAt (board initialGrid) (Coordinate 0, Coordinate 1))
+    assertEqual "Get invalid candy" Nothing (getCandyAt (board initialGrid) (Coordinate 3, Coordinate 3))
+
+testSetCandyAt :: Test
+testSetCandyAt = TestCase $ do
+    let updatedBoard = setCandyAt (board initialGrid) (Coordinate 0, Coordinate 1) candy6
+    case getCandyAt updatedBoard (Coordinate 0, Coordinate 1) of
+        Just candy -> assertEqual "Set valid candy" candy6 candy
+        Nothing -> assertFailure "Candy not found at (0,1)"
+    case getCandyAt (board initialGrid) (Coordinate 0, Coordinate 1) of
+        Just candy -> assertEqual "Original board unchanged" candy2 candy
+        Nothing -> assertFailure "Candy not found at (0,0)"
+
+testSetCandyAtBoundary :: Test
+testSetCandyAtBoundary = TestCase $ do
+    let updatedBoard = setCandyAt (board initialGrid) (Coordinate (-1), Coordinate 0) candy6
+    assertEqual "Set candy at negative index should not change board" (board initialGrid) updatedBoard
+    let updatedBoard2 = setCandyAt (board initialGrid) (Coordinate 0, Coordinate 100) candy6
+    assertEqual "Set candy at out-of-bounds index should not change board" (board initialGrid) updatedBoard2
+
+testGetCandyAtBoundary :: Test
+testGetCandyAtBoundary = TestCase $ do
+    let result = getCandyAt (board initialGrid) (Coordinate (-1), Coordinate 0)
+    assertEqual "Get candy at negative index should return Nothing" Nothing result
+    let result2 = getCandyAt (board initialGrid) (Coordinate 0, Coordinate 100)
+    assertEqual "Get candy at out-of-bounds index should return Nothing" Nothing result2
+
+-- QuickCheck properties
+-- Property: Only valid coordinates are cleared by generateSpecialEffect
+prop_validCoordinatesCleared :: Difficulty -> Property
+prop_validCoordinatesCleared d = monadicIO $ do
+    normalCandies <- run $ generate (listOf1 (genArbNormalCandy d))
+    board <- run $ generate (genGameBoard d (return normalCandies))
+    coord <- run $ generate (genArbIntCoordPair d)
+    specialCandy <- run $ generate (genArbSpecialCandy d)
+    boardAfterEffect <- run $ return (generateSpecialEffect specialCandy coord board)
+    let positionsCleared = case effectRange (candyEffect specialCandy) of
+            Circle r -> computeCirclePositions (getCoord coord) r
+            Rectangle w h -> computeRectanglePositions (getCoord coord) w h
+            Diamond r -> computeDiamondPositions (getCoord coord) r
+            Arbitrary coords -> computeArbitraryPositions (length board, length (head board)) (getCoord coord) coords
+    let clearedPositions = filter (validCoordinate board) positionsCleared
+    Test.QuickCheck.Monadic.assert $
+        all ((Just EmptyCandy ==) . getCandyAt boardAfterEffect) clearedPositions
+
+-- Property: Positions outside the effect range remain unchanged
+prop_noUnintendedModifications :: Difficulty -> Property
+prop_noUnintendedModifications d = monadicIO $ do
+    normalCandies <- run $ generate (listOf1 (genArbNormalCandy d))
+    board <- run $ generate (genGameBoard d (return normalCandies))
+    coord <- run $ generate (genArbIntCoordPair d)
+    specialCandy <- run $ generate (genArbSpecialCandy d)
+    let positionsToClear = case effectRange (candyEffect specialCandy) of
+            Circle r -> computeCirclePositions (getCoord coord) r
+            Rectangle w h -> computeRectanglePositions (getCoord coord) w h
+            Diamond r -> computeDiamondPositions (getCoord coord) r
+            Arbitrary coords -> computeArbitraryPositions (length board, length (head board)) (getCoord coord) coords
+        unaffectedPositions =
+            filter (`notElem` positionsToClear) (allCoordinates board)
+    boardAfterEffect <-
+        run $ return (generateSpecialEffect specialCandy coord board)
+    let unaffectedCandies = map (getCandyAt board) unaffectedPositions
+        affectedCandies = map (getCandyAt boardAfterEffect) unaffectedPositions
+    Test.QuickCheck.Monadic.assert $ unaffectedCandies == affectedCandies
+
+-- Property: Filling a board twice has the same effect as filling it once
+prop_fillBoardIdempotency :: Difficulty -> Property
+prop_fillBoardIdempotency d = monadicIO $ do
+    normalCandies <- run $ generate (listOf1 (genArbNormalCandy d))
+    board <- run $ generate (genGameBoardWithEmpty (return normalCandies))
+    filledOnce <- run $ fillBoard (return board) normalCandies
+    filledTwice <- run $ fillBoard (return filledOnce) normalCandies
+    Test.QuickCheck.Monadic.assert $ filledOnce == filledTwice
+
+-- Property: Applying the same special effect twice is equivalent to applying it once
+prop_specialEffectIdempotency :: Difficulty -> Property
+prop_specialEffectIdempotency d = monadicIO $ do
+    normalCandies <- run $ generate (listOf1 (genArbNormalCandy d))
+    board <- run $ generate (genGameBoard d (return normalCandies))
+    coord <- run $ generate (genArbIntCoordPair d)
+    specialCandy <- run $ generate (genArbSpecialCandy d)
+    boardAfterFirst <- run $ return (generateSpecialEffect specialCandy coord board)
+    boardAfterSecond <- run $ return (generateSpecialEffect specialCandy coord boardAfterFirst)
+    Test.QuickCheck.Monadic.assert $ boardAfterFirst == boardAfterSecond
+
+-- Property: Applying two special effects in any order is equivalent to applying them in the opposite order
+prop_specialEffectAssociativity :: Difficulty -> Property
+prop_specialEffectAssociativity d = monadicIO $ do
+    normalCandies <- run $ generate (listOf1 (genArbNormalCandy d))
+    board <- run $ generate (genGameBoard d (return normalCandies))
+    coord1 <- run $ generate (genArbIntCoordPair d)
+    coord2 <- run $ generate (genArbIntCoordPair d)
+    candy1 <- run $ generate (genArbSpecialCandy d)
+    candy2 <- run $ generate (genArbSpecialCandy d)
+    let board1 = generateSpecialEffect candy1 coord1
+            (generateSpecialEffect candy2 coord2 board)
+        board2 = generateSpecialEffect candy2 coord2
+            (generateSpecialEffect candy1 coord1 board)
+    Test.QuickCheck.Monadic.assert $ board1 == board2
+
+-- Property: No EmptyCandy remains after applying generateSpecialEffect and fillBoard
+prop_noEmptyCandyAfterFill :: Difficulty -> Property
+prop_noEmptyCandyAfterFill d = monadicIO $ do
+    normalCandies <- run $ generate (listOf1 (genArbNormalCandy d))
+    board <- run $ generate (genGameBoard d (return normalCandies))
+    coord <- run $ generate (genArbIntCoordPair d)
+    specialCandy <- run $ generate (genArbSpecialCandy d)
+    boardAfterEffect <- run $ return (generateSpecialEffect specialCandy coord board)
+    filledBoard <- run $ fillBoard (return boardAfterEffect) normalCandies
+    let allCandies = concat filledBoard
+    Test.QuickCheck.Monadic.assert $ notElem EmptyCandy allCandies
+
+-- Property: Setting and then getting a candy at a valid coordinate retrieves the same candy
+prop_setGetCandyAt :: Difficulty -> Property
+prop_setGetCandyAt d = monadicIO $ do
+    normalCandies <- run $ generate (listOf1 (genArbNormalCandy d))
+    board <- run $ generate (genGameBoard d (return normalCandies))
+    -- make sure to generate a valid coordinate
+    coord <- run $ generate (genArbIntCoordPair d)
+    -- make sure to generate a different candy
+    newCandy <- run $ generate (genArbSpecialCandy d)
+    let newBoard = setCandyAt board coord newCandy
+        retrievedCandy = getCandyAt newBoard coord
+    Test.QuickCheck.Monadic.assert $ retrievedCandy == Just newCandy
+
+-- Helper function
+getCoord :: CoordinatePair -> (Int, Int)
+getCoord (Coordinate x, Coordinate y) = (x, y)
+getCoord (All, y) = error "Invalid coordinate: All"
+getCoord (x, All) = error "Invalid coordinate: All"
+
+-- Run tests
 runUnitTests :: IO Counts
 runUnitTests = runTestTT $ TestList [
     TestLabel "testGenerateRandomCandy" testGenerateRandomCandy,
-    TestLabel "testGenerateRandomCandyList" testGenerateRandomCandyList
+    TestLabel "testGenerateRandomCandyList" testGenerateRandomCandyList,
+    TestLabel "test_computeCirclePositions" test_computeCirclePositions,
+    TestLabel "test_computeRectanglePositions" test_computeRectanglePositions,
+    TestLabel "test_computeDiamondPositions" test_computeDiamondPositions,
+    TestLabel "test_computeArbitraryPositions" test_computeArbitraryPositions,
+    TestLabel "test_generateSpecialEffect1" test_generateSpecialEffect1,
+    TestLabel "test_generateSpecialEffect2" test_generateSpecialEffect2
     ]
 
 runQuickCheckTests :: IO ()
 runQuickCheckTests = do
-    putStrLn "prop_generateRandomCandy:"
-    quickCheck prop_generateRandomCandy
-    putStrLn "prop_generateRandomCandyList:"
-    quickCheck prop_generateRandomCandyList
+    putStrLn "prop_validCoordinatesCleared:"
+    quickCheck prop_validCoordinatesCleared
+    putStrLn "prop_noUnintendedModifications:"
+    quickCheck prop_noUnintendedModifications
+    putStrLn "prop_fillBoardIdempotency:"
+    quickCheck prop_fillBoardIdempotency
+    putStrLn "prop_specialEffectIdempotency:"
+    quickCheck prop_specialEffectIdempotency
+    putStrLn "prop_specialEffectAssociativity:"
+    quickCheck prop_specialEffectAssociativity
+    putStrLn "prop_noEmptyCandyAfterFill:"
+    quickCheck prop_noEmptyCandyAfterFill
+    putStrLn "prop_setGetCandyAt:"
+    quickCheck prop_setGetCandyAt
+
+main :: IO ()
+main = do
+    runUnitTests >>= print
+    runQuickCheckTests

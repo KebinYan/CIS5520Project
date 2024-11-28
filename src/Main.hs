@@ -5,7 +5,7 @@ import Control.Monad.State
 
 import Candy
 import GameController
-import GameGrid
+import GameState
 import GameUtils
 
 main :: IO ()

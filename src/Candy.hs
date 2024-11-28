@@ -11,7 +11,7 @@ type CandyShape = String
 type CandyEffect = String
 
 data Coordinate = Coordinate Int | All
-    deriving (Show, Eq)
+    deriving (Show, Eq, Ord)
 
 type CoordinatePair = (Coordinate, Coordinate)
 
@@ -158,14 +158,14 @@ emptyLineP = wsP $ do
     char '\n'
     return ()
 
-main :: IO ()
-main = do
-    content <- readFile "src/candies.txt"
-    case parse fileP content of
-        Left err -> putStrLn $ "Parse Error: " ++ err
-        Right (effects, candies) -> do
-            putStrLn "Parsing Successful:"
-            putStrLn "Effects Parsed:"
-            mapM_ print effects
-            putStrLn "\nCandies Parsed:"
-            mapM_ print candies
+-- main :: IO ()
+-- main = do
+--     content <- readFile "src/candies.txt"
+--     case parse fileP content of
+--         Left err -> putStrLn $ "Parse Error: " ++ err
+--         Right (effects, candies) -> do
+--             putStrLn "Parsing Successful:"
+--             putStrLn "Effects Parsed:"
+--             mapM_ print effects
+--             putStrLn "\nCandies Parsed:"
+--             mapM_ print candies
