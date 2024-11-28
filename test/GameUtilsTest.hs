@@ -34,8 +34,8 @@ testGenerateRandomCandyList = TestCase $ do
         (all ((== "Normal") . effectName . candyEffect) generatedCandies)
 
 -- Unit test for generateSpecialEffect
-test_computeCirclePositions :: Test
-test_computeCirclePositions = TestCase $ do
+testComputeCirclePositions :: Test
+testComputeCirclePositions = TestCase $ do
     let positions = computeCirclePositions (2, 2) 1
         expected = sort [
             (Coordinate 1, Coordinate 2),
@@ -45,20 +45,20 @@ test_computeCirclePositions = TestCase $ do
             (Coordinate 3, Coordinate 2)]
     assertEqual "computeCirclePositions" (sort positions) expected
 
-test_computeRectanglePositions :: Test
-test_computeRectanglePositions = TestCase $ do
+testComputeRectanglePositions :: Test
+testComputeRectanglePositions = TestCase $ do
     let positions = computeRectanglePositions (2, 2) 3 2
         expected = sort [
             (Coordinate 1, Coordinate 1),
             (Coordinate 1, Coordinate 2),
-            (Coordinate 1, Coordinate 3),
             (Coordinate 2, Coordinate 1),
             (Coordinate 2, Coordinate 2),
-            (Coordinate 2, Coordinate 3)]
+            (Coordinate 3, Coordinate 1),
+            (Coordinate 3, Coordinate 2)]
     assertEqual "computeRectanglePositions" (sort positions) expected
 
-test_computeDiamondPositions :: Test
-test_computeDiamondPositions = TestCase $ do
+testComputeDiamondPositions :: Test
+testComputeDiamondPositions = TestCase $ do
     let positions = computeDiamondPositions (2, 2) 1
         expected = sort [
             (Coordinate 2, Coordinate 2),
@@ -68,8 +68,8 @@ test_computeDiamondPositions = TestCase $ do
             (Coordinate 3, Coordinate 2)]
     assertEqual "computeDiamondPositions" (sort positions) expected
 
-test_computeArbitraryPositions :: Test
-test_computeArbitraryPositions = TestCase $ do
+testComputeArbitraryPositions :: Test
+testComputeArbitraryPositions = TestCase $ do
     let boardSize = (3, 3)
         positions = computeArbitraryPositions boardSize (2, 1) [(Coordinate 0, All), (All, Coordinate 0)]
         expected = sort [
@@ -80,8 +80,8 @@ test_computeArbitraryPositions = TestCase $ do
             (Coordinate 2, Coordinate 2)]
     assertEqual "computeArbitraryPositions" (sort positions) expected
 
-test_generateSpecialEffect1 :: Test
-test_generateSpecialEffect1 = TestCase $ do
+testGenerateSpecialEffect1 :: Test
+testGenerateSpecialEffect1 = TestCase $ do
     let testBoard = board crushableGrid
         coord = (Coordinate 2, Coordinate 2)
         newBoard = generateSpecialEffect candy5 coord testBoard
@@ -90,8 +90,8 @@ test_generateSpecialEffect1 = TestCase $ do
     assertBool "generateSpecialEffect - bomb" $
         all (== Just EmptyCandy) candiesAtClearedPositions
 
-test_generateSpecialEffect2 :: Test
-test_generateSpecialEffect2 = TestCase $ do
+testGenerateSpecialEffect2 :: Test
+testGenerateSpecialEffect2 = TestCase $ do
     let testBoard = board crushableGrid
         coord = (Coordinate 2, Coordinate 1)
         newBoard = generateSpecialEffect candy6 coord testBoard
@@ -131,11 +131,11 @@ testGetCandyAtBoundary = TestCase $ do
 
 testClearPosition :: Test
 testClearPosition = TestCase $ do
-    let grid = clearPosition (board crushableGrid) (Coordinate 1, Coordinate 1)
+    let grid = clearPosition (board initialGrid) (Coordinate 1, Coordinate 1)
     let expectedBoard = 
-            [ [candy1, candy1, candy1]
-            , [candy2, EmptyCandy, candy2]
-            , [candy2, candy6, candy5]
+            [ [candy2, candy2, candy3]
+            , [candy4, EmptyCandy, candy2]
+            , [candy3, candy5, candy4]
             ]
     assertEqual "Grids should be equal" expectedBoard grid
 
@@ -176,7 +176,7 @@ testFillBoard = TestCase $ do
 
 testAllCoordinates :: Test
 testAllCoordinates = TestCase $ do
-    let coords = allCoordinates (board crushableGrid)
+    let coords = allCoordinates (board initialGrid)
     let expectedCoords = 
             [ (Coordinate 0, Coordinate 0),
               (Coordinate 0, Coordinate 1),
@@ -298,12 +298,12 @@ runUnitTests :: IO Counts
 runUnitTests = runTestTT $ TestList [
     TestLabel "testGenerateRandomCandy" testGenerateRandomCandy,
     TestLabel "testGenerateRandomCandyList" testGenerateRandomCandyList,
-    TestLabel "test_computeCirclePositions" test_computeCirclePositions,
-    TestLabel "test_computeRectanglePositions" test_computeRectanglePositions,
-    TestLabel "test_computeDiamondPositions" test_computeDiamondPositions,
-    TestLabel "test_computeArbitraryPositions" test_computeArbitraryPositions,
-    TestLabel "test_generateSpecialEffect1" test_generateSpecialEffect1,
-    TestLabel "test_generateSpecialEffect2" test_generateSpecialEffect2,
+    TestLabel "testComputeCirclePositions" testComputeCirclePositions,
+    TestLabel "testComputeRectanglePositions" testComputeRectanglePositions,
+    TestLabel "testComputeDiamondPositions" testComputeDiamondPositions,
+    TestLabel "testComputeArbitraryPositions" testComputeArbitraryPositions,
+    TestLabel "testGenerateSpecialEffect1" testGenerateSpecialEffect1,
+    TestLabel "testGenerateSpecialEffect2" testGenerateSpecialEffect2,
     TestLabel "testGetCandyAt" testGetCandyAt,
     TestLabel "testSetCandyAt" testSetCandyAt,
     TestLabel "testSetCandyAtBoundary" testSetCandyAtBoundary,
