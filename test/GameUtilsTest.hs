@@ -129,6 +129,66 @@ testGetCandyAtBoundary = TestCase $ do
     let result2 = getCandyAt (board initialGrid) (Coordinate 0, Coordinate 100)
     assertEqual "Get candy at out-of-bounds index should return Nothing" Nothing result2
 
+testClearPosition :: Test
+testClearPosition = TestCase $ do
+    let grid = clearPosition (board crushableGrid) (Coordinate 1, Coordinate 1)
+    let expectedBoard = 
+            [ [candy1, candy1, candy1]
+            , [candy2, EmptyCandy, candy2]
+            , [candy2, candy6, candy5]
+            ]
+    assertEqual "Grids should be equal" expectedBoard grid
+
+testValidCoordinate :: Test
+testValidCoordinate = TestCase $ do
+    assertBool "Valid coordinate" (validCoordinate (board initialGrid) (Coordinate 0, Coordinate 0))
+    assertBool "Invalid coordinate" (not $ validCoordinate (board initialGrid) (Coordinate 3, Coordinate 0))
+    assertBool "Invalid coordinate" (not $ validCoordinate (board initialGrid) (Coordinate 0, Coordinate (-1)))
+    assertBool "Invalid coordinate" (not $ validCoordinate (board initialGrid) (Coordinate 0, All))
+
+testRedeemSpecialCandy :: Test
+testRedeemSpecialCandy = TestList [
+    "Create a striped row candy with 4 candies" ~:
+        do result <- redeemSpecialCandy 4 (specialCandies crushableGrid)
+           assertEqual "Redeem special candy with 4 candies" (Just candy7) result,
+    "Create a bomb candy or a striped cross candy with 5 candies" ~:
+        do result <- redeemSpecialCandy 5 (specialCandies crushableGrid)
+           assertBool "Redeem special candy with 5 candies" 
+            (result == Just candy5 || result == Just candy6),
+    "Create a striped cross candy with 6 candies" ~:
+        do result <- redeemSpecialCandy 6 (specialCandies crushableGrid)
+           assertEqual "Redeem special candy with 6 candies" (Just candy6) result,
+    "No special candy with fewer than 4 candies" ~:
+        do result <- redeemSpecialCandy 3 (specialCandies crushableGrid)
+           assertEqual "No special candy with fewer than 4 candies" Nothing result
+  ]
+
+testFillRow :: Test
+testFillRow = TestCase $ do
+    let row = [EmptyCandy, EmptyCandy, EmptyCandy, EmptyCandy]
+    newRow <- fillRow row (normalCandies crushableGrid)
+    assertBool "No empty candies" (EmptyCandy `notElem` newRow)
+
+testFillBoard :: Test
+testFillBoard = TestCase $ do
+    newBoard <- fillBoard (board gridWithEmptyCandy) (normalCandies gridWithEmptyCandy)
+    assertBool "No empty candies" (EmptyCandy `notElem` concat newBoard)
+
+testAllCoordinates :: Test
+testAllCoordinates = TestCase $ do
+    let coords = allCoordinates (board crushableGrid)
+    let expectedCoords = 
+            [ (Coordinate 0, Coordinate 0),
+              (Coordinate 0, Coordinate 1),
+              (Coordinate 0, Coordinate 2),
+              (Coordinate 1, Coordinate 0),
+              (Coordinate 1, Coordinate 1),
+              (Coordinate 1, Coordinate 2),
+              (Coordinate 2, Coordinate 0),
+              (Coordinate 2, Coordinate 1),
+              (Coordinate 2, Coordinate 2) ]
+    assertEqual "Coordinates should be equal" expectedCoords coords
+
 -- QuickCheck properties
 -- Property: Only valid coordinates are cleared by generateSpecialEffect
 prop_validCoordinatesCleared :: Difficulty -> Property
@@ -172,8 +232,8 @@ prop_fillBoardIdempotency :: Difficulty -> Property
 prop_fillBoardIdempotency d = monadicIO $ do
     normalCandies <- run $ generate (listOf1 (genArbNormalCandy d))
     board <- run $ generate (genGameBoardWithEmpty (return normalCandies))
-    filledOnce <- run $ fillBoard (return board) normalCandies
-    filledTwice <- run $ fillBoard (return filledOnce) normalCandies
+    filledOnce <- run $ fillBoard board normalCandies
+    filledTwice <- run $ fillBoard filledOnce normalCandies
     Test.QuickCheck.Monadic.assert $ filledOnce == filledTwice
 
 -- Property: Applying the same special effect twice is equivalent to applying it once
@@ -210,7 +270,7 @@ prop_noEmptyCandyAfterFill d = monadicIO $ do
     coord <- run $ generate (genArbIntCoordPair d)
     specialCandy <- run $ generate (genArbSpecialCandy d)
     boardAfterEffect <- run $ return (generateSpecialEffect specialCandy coord board)
-    filledBoard <- run $ fillBoard (return boardAfterEffect) normalCandies
+    filledBoard <- run $ fillBoard boardAfterEffect normalCandies
     let allCandies = concat filledBoard
     Test.QuickCheck.Monadic.assert $ notElem EmptyCandy allCandies
 
@@ -243,7 +303,17 @@ runUnitTests = runTestTT $ TestList [
     TestLabel "test_computeDiamondPositions" test_computeDiamondPositions,
     TestLabel "test_computeArbitraryPositions" test_computeArbitraryPositions,
     TestLabel "test_generateSpecialEffect1" test_generateSpecialEffect1,
-    TestLabel "test_generateSpecialEffect2" test_generateSpecialEffect2
+    TestLabel "test_generateSpecialEffect2" test_generateSpecialEffect2,
+    TestLabel "testGetCandyAt" testGetCandyAt,
+    TestLabel "testSetCandyAt" testSetCandyAt,
+    TestLabel "testSetCandyAtBoundary" testSetCandyAtBoundary,
+    TestLabel "testGetCandyAtBoundary" testGetCandyAtBoundary,
+    TestLabel "testClearPosition" testClearPosition,
+    TestLabel "testValidCoordinate" testValidCoordinate,
+    TestLabel "testRedeemSpecialCandy" testRedeemSpecialCandy,
+    TestLabel "testFillRow" testFillRow,
+    TestLabel "testFillBoard" testFillBoard,
+    TestLabel "testAllCoordinates" testAllCoordinates
     ]
 
 runQuickCheckTests :: IO ()

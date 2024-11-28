@@ -26,7 +26,19 @@ data Action = Swap CoordinatePair CoordinatePair
             | Quit
             | Trigger (CoordinatePair, Candy)
             | Disappear [CoordinatePair]
-    deriving (Eq, Show)
+    deriving (Show)
+
+instance Eq Action where
+    (==) :: Action -> Action -> Bool
+    (Swap c1 c2) == (Swap c3 c4) = 
+        (c1 == c3 && c2 == c4) || (c1 == c4 && c2 == c3)
+    (Click c1) == (Click c2) = c1 == c2
+    Undo == Undo = True
+    Quit == Quit = True
+    (Trigger (c1, candy1)) == (Trigger (c2, candy2)) = 
+        c1 == c2 && candy1 == candy2
+    (Disappear cs1) == (Disappear cs2) = cs1 == cs2
+    _ == _ = False
 
 -- Constructor for Disappear action that sorts the coordinates
 constructDisappear :: [CoordinatePair] -> Action
@@ -42,7 +54,10 @@ instance Ord Action where
     compare Undo _ = LT
     compare (Swap _ _) _ = LT
     compare (Click _) _ = LT
+    compare (Disappear cs1) (Disappear cs2) = 
+        compare (sort cs1) (sort cs2)
     compare (Disappear _) _ = LT
+    compare (Trigger (c1, _)) (Trigger (c2, _)) = compare c1 c2
     compare (Trigger _) _ = LT
 
 -- Define action result
@@ -225,21 +240,21 @@ applyClick g@(GameGrid board _ _ _) coord
     | otherwise =
         let candy = getCandyAt board coord
         in case candy of
-            Nothing -> return g
-            Just EmptyCandy -> return g
-            Just c -> applyTrigger g coord c
+            Just c | effectName (candyEffect c) /= "Normal" -> 
+                applyTrigger g coord c
+            _ -> return g
 
 applyDisappear :: GameGrid -> [CoordinatePair] -> IO GameGrid
 applyDisappear g@(GameGrid board _ specialCandies _) coords = do
     let clearBoard = foldl clearPosition board coords
         disappearCoords = extractDisappearCoords (Disappear coords)
-    specialCandy <- redeemSpecialCandy disappearCoords specialCandies
+    specialCandy <- redeemSpecialCandy (length disappearCoords) specialCandies
     case specialCandy of
         Just candy -> do
             let position = coords !! (length coords `div` 2)
                 newBoard = setCandyAt clearBoard position candy
             return $ updateBoard newBoard g
-        Nothing -> return g
+        Nothing -> return $ updateBoard clearBoard g
 
 extractDisappearCoords :: Action -> [CoordinatePair]
 extractDisappearCoords (Disappear coords) = coords
@@ -254,39 +269,29 @@ fillAndCrushStateIO :: GameState -> IO GameState
 fillAndCrushStateIO state = do
     let board = currentGrid state
         candies = normalCandies (currentGrid state)
-    filledGrid <- fillAndCrushUntilStable (return board) candies
+    filledGrid <- fillAndCrushUntilStable board candies
     return $ state { currentGrid = filledGrid }
 
-fillAndCrushUntilStable :: IO GameGrid -> [Candy] -> IO GameGrid
+fillAndCrushUntilStable :: GameGrid -> [Candy] -> IO GameGrid
 fillAndCrushUntilStable grid candies = do
     -- Fill the grid with random candies
-    newBoard <- fillBoard (board <$> grid) candies
-    filledGrid <- updateBoard newBoard <$> grid
+    newBoard <- fillBoard (board grid) candies
+    let filledGrid = updateBoard newBoard grid
+        updatedGrid = updateEmptyCandyCoords [] filledGrid
     -- Auto-crush all crushable candies
-    newGrid <- autoCrush (return filledGrid)
+    newGrid <- autoCrush updatedGrid
     -- If there are still crushable candies, repeat the process
-    if board newGrid == board filledGrid
+    if board newGrid == board updatedGrid
     then return newGrid
-    else fillAndCrushUntilStable (return newGrid) candies
+    else fillAndCrushUntilStable newGrid candies
 
 -- Auto-crush all crushable candies except special candies
-autoCrush :: IO GameGrid -> IO GameGrid
-autoCrush ioGrid = do
-    g@(GameGrid board _ _ _) <- ioGrid
+autoCrush :: GameGrid -> IO GameGrid
+autoCrush g = do
     let actions = findAllNormalCrushables g
-        newGrid = applyActions g actions
     if null actions
     then return g
-    else newGrid
-
--- Helper function to filter out actions involving special candies
--- isNormalDisappear :: [[Candy]] -> Action -> Bool
--- isNormalDisappear grid (Disappear coords) =
---     all (maybe True (isNormal . effectName candyEffect) . getCandyAt (board grid)) coords
---   where
---     isNormal "Normal" = True
---     isNormal _ = False
--- isNormalDisappear _ _ = False
+    else applyActions g actions
 
 -- Find all crushable candies in the board
 findAllNormalCrushables :: GameGrid -> [Action]

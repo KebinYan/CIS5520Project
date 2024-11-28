@@ -7,7 +7,7 @@ import GameUtils
 import qualified Data.List as List
 import System.Random as Random
 import Data.Maybe
-import Data.Map (Map)
+import Data.Map (Map, update)
 
 data Difficulty = Difficulty {
     dimension :: Int,
@@ -198,7 +198,7 @@ initializeGrid d = do
     return $ GameGrid {
         board = splitIntoRows dim candiesInBoard,
         normalCandies = normalCandies,
-        specialCandies = extractSpecialCandies (candies d),
+        specialCandies = extractSpecialCandies dim (candies d),
         emptyCandyCoords = []
     }
 
@@ -250,6 +250,9 @@ getRemainingSteps = gets remainingSteps
 -- Get the emptyCandyCoords
 getEmptyCandyCoords :: GameGrid -> [CoordinatePair]
 getEmptyCandyCoords (GameGrid _ _ _ emptyCandyCoords) = emptyCandyCoords
+
+updateEmptyCandyCoords :: [CoordinatePair] -> GameGrid -> GameGrid
+updateEmptyCandyCoords coords g = g { emptyCandyCoords = coords }
 
 -- Add to the score
 addScore :: Int -> GameMonad ()

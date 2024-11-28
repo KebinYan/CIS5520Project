@@ -8,6 +8,7 @@ import GameUtils
 import GameState
 import GameController
 import qualified Data.Map as Map
+import Control.Monad
 
 -- Sample candies for testing
 candy1 :: Candy
@@ -115,8 +116,11 @@ crushableGrid = GameGrid
         ],
         normalCandies = [candy1, candy2],
         specialCandies = Map.fromList [
-            (4, [candy6]),
-            (5, [candy5])
+            (4, [candy7]),
+            (5, [candy5]),
+            (5, [candy6]),
+            (6, [candy6]),
+            (7, [candy6])
         ],
         emptyCandyCoords = []
     }
@@ -147,12 +151,6 @@ gridWithEmptyCandy = GameGrid
 instance Arbitrary Difficulty where
     arbitrary :: Gen Difficulty
     arbitrary = elements [easy, medium, hard]
-    shrink :: Difficulty -> [Difficulty]
-    shrink difficulty =
-        case difficulty of
-            hard -> [medium, easy]
-            medium -> [easy]
-            easy -> []  
 
 instance Arbitrary Operator where
     arbitrary :: Gen Operator
@@ -228,7 +226,9 @@ genGameBoardWithEmpty candies = do
 
 genGameGrid :: Difficulty -> Gen GameGrid
 genGameGrid d =
-    let normalCandies = listOf1 (genArbNormalCandy d)
+    let normalCandies =
+            liftM2 (++) (replicateM (dimension d) (genArbNormalCandy d)) 
+            (listOf (genArbNormalCandy d))
     in GameGrid <$>
         genGameBoard d normalCandies <*>
         normalCandies <*>
@@ -256,12 +256,12 @@ genEmptyCandyCoords d = listOf (genArbCoordPair d)
 genArbAction :: Difficulty -> Gen Action
 genArbAction d =
     oneof [
-        Swap <$> genArbCoordPair d <*> genArbCoordPair d,
-        Click <$> genArbCoordPair d,
+        Swap <$> genArbIntCoordPair d <*> genArbIntCoordPair d,
+        Click <$> genArbIntCoordPair d,
         pure Undo,
         pure Quit,
-        Disappear <$> listOf1 (genArbCoordPair d),
-        Trigger <$> ((,) <$> genArbCoordPair d <*> genArbSpecialCandy d)
+        Disappear <$> listOf1 (genArbIntCoordPair d),
+        Trigger <$> ((,) <$> genArbIntCoordPair d <*> genArbSpecialCandy d)
     ]
 
 genArbUserAction :: Difficulty -> Gen Action

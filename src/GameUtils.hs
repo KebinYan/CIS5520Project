@@ -38,7 +38,7 @@ generateSpecialEffect candy coord board =
                         computeArbitraryPositions
                             (length board, length (head board)) (x, y) coords
             in foldl clearPosition board positionsToClear
-        _ -> error "Invalid candy coordinate"
+        _ -> error ("Invalid candy coordinate: " ++ show coord)
 
 -- Compute the positions to clear for a circle effect
 computeCirclePositions :: (Int, Int) -> Int -> [CoordinatePair]
@@ -129,47 +129,55 @@ extractNormalCandies = filter (\candy ->
     effectName (candyEffect candy) == "Normal")
 
 -- Extract special candies from a candies list
-extractSpecialCandies :: [Candy] -> Map Int [Candy]
-extractSpecialCandies = foldr extractSpecialCandy Data.Map.empty
+extractSpecialCandies :: Int -> [Candy] -> Map Int [Candy]
+extractSpecialCandies dim = foldr extractSpecialCandy Data.Map.empty
     where
         extractSpecialCandy candy acc =
             let req = effectRequirement (candyEffect candy)
             in case req of
                 Requirement Eq 0 -> acc
-                Requirement Eq n -> Data.Map.insertWith (++) n [candy] acc
-                _ -> acc
+                Requirement Eq n ->
+                    if n < dim * dim
+                    then insertWith (++) n [candy] acc
+                    else acc
+                Requirement Ge n ->
+                    if n < dim * dim
+                    then foldr (\i -> insertWith (++) i [candy]) acc [n.. dim * dim]
+                    else acc
+                Requirement Gt n ->
+                    if n < dim * dim
+                    then foldr (\i -> insertWith (++) i [candy]) acc [n + 1.. dim * dim]
+                    else acc
 
 -- | Reedem a special candy based on the number of candies in the list
-redeemSpecialCandy :: [CoordinatePair] -> Map Int [Candy] -> IO (Maybe Candy)
-redeemSpecialCandy coords specialCandies =
-    let n = length coords
-    in case n of
-        0 -> return Nothing
-        n -> case Data.Map.lookup n specialCandies of
-            Just candies -> generateRandomCandy candies >>= return . Just
-            Nothing -> return Nothing
+redeemSpecialCandy :: Int -> Map Int [Candy] -> IO (Maybe Candy)
+redeemSpecialCandy n specialCandies = do
+    if n == 0
+        then return Nothing
+        else case Data.Map.lookup n specialCandies of
+            Just candies | not (null candies) ->
+                generateRandomCandy candies >>= return . Just
+            _ -> return Nothing
 
 candyToSymbol :: Candy -> String
 candyToSymbol EmptyCandy = " "
-candyToSymbol candy = 
-    let (shape, color) = case effectName (candyEffect candy) of
-            "Normal" -> (shapeIcon (candyDef candy), "\ESC[30m")
-            _ -> (shapeIcon (candyDef candy), "\ESC[91m")
-    in shape ++ color ++ "\ESC[0m"
+candyToSymbol candy =
+    let color = case effectName (candyEffect candy) of
+            "Normal" -> "\ESC[30m"
+            _ -> "\ESC[91m"
+    in color ++ shapeIcon (candyDef candy) ++ "\ESC[0m"
 
 -- Fill the entire board row by row
-fillBoard :: IO [[Candy]] -> [Candy] -> IO [[Candy]]
-fillBoard ioRows candies
+fillBoard :: [[Candy]] -> [Candy] -> IO [[Candy]]
+fillBoard rows candies
     | null candies = error "No candies available"
-    | otherwise = do
-        rows <- ioRows
-        mapM (`fillRow` candies) rows
+    | otherwise = mapM (`fillRow` candies) rows
 
 -- Fill a single row, handling empty candies
 fillRow :: [Candy] -> [Candy] -> IO [Candy]
-fillRow row candies 
+fillRow row candies
     | null candies = error "No candies available"
-    | otherwise = mapM (\candy -> 
+    | otherwise = mapM (\candy ->
         if candy == EmptyCandy
         then generateRandomCandy candies
         else return candy) row

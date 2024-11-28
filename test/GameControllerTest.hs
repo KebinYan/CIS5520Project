@@ -8,7 +8,7 @@ import GameController
 import GameState
 import Candy
 import qualified Data.Set as Set
-import Test.QuickCheck.Poly (C(C))
+import Data.List (sort)
 
 -- Test contructDisappear: coordinates should be sorted
 testConstructDisappear :: Test
@@ -125,62 +125,6 @@ testSwapHelpers = TestList [
     TestLabel "findCrushables2" testFindCrushables2
   ]
 
--- Test helper functions for crush action
--- testClearRow :: Test
--- testClearRow = TestCase $ do
---     let grid = clearRow 0 (board initialGrid)
---     let expectedBoard = 
---             [ [EmptyCandy, EmptyCandy, EmptyCandy]
---             , [candy4, candy1, candy2]
---             , [candy3, candy5, candy4]
---             ]
---     assertEqual "Grids should be equal" expectedBoard grid
-
--- testClearColumn :: Test
--- testClearColumn = TestCase $ do
---     let grid = clearColumn 0 (board crushableGrid)
---     let expectedBoard = 
---             [ [EmptyCandy, candy1, candy1]
---             , [EmptyCandy, candy2, candy2]
---             , [EmptyCandy, candy1, bombCandy]
---             ]
---     assertEqual "Grids should be equal" expectedBoard grid
-
--- testClearSurrounding :: Test
--- testClearSurrounding = TestCase $ do
---     let grid = clearSurrounding (board crushableGrid) (2, 2)
---     let expectedBoard = 
---             [ [candy1, candy1, candy1]
---             , [candy2, EmptyCandy, EmptyCandy]
---             , [candy2, EmptyCandy, EmptyCandy]
---             ]
---     assertEqual "Grids should be equal" expectedBoard grid
-
--- testClearPosition :: Test
--- testClearPosition = TestCase $ do
---     let grid = clearPosition (board crushableGrid) (1, 1)
---     let expectedBoard = 
---             [ [candy1, candy1, candy1]
---             , [candy2, EmptyCandy, candy2]
---             , [candy2, candy1, bombCandy]
---             ]
---     assertEqual "Grids should be equal" expectedBoard grid
-
--- testValidCoordinate :: Test
--- testValidCoordinate = TestCase $ do
---     assertBool "Valid coordinate" (validCoordinate initialGrid (0, 0))
---     assertBool "Invalid coordinate" (not $ validCoordinate initialGrid (3, 0))
---     assertBool "Invalid coordinate" (not $ validCoordinate initialGrid (0, -1))
-
--- testCrushHelpers :: Test
--- testCrushHelpers = TestList [
---     TestLabel "clearRow" testClearRow,
---     TestLabel "clearColumn" testClearColumn,
---     TestLabel "clearSurrounding" testClearSurrounding,
---     TestLabel "clearPosition" testClearPosition,
---     TestLabel "validCoordinate" testValidCoordinate
---   ]
-
 -- Test helper functions for apply action
 testApplyDisappear :: Test
 testApplyDisappear = TestCase $ do
@@ -191,7 +135,7 @@ testApplyDisappear = TestCase $ do
     let expectedBoard =
             [ [EmptyCandy, EmptyCandy, EmptyCandy]
             , [candy2, candy2, candy2]
-            , [candy2, candy1, candy5]
+            , [candy2, candy6, candy5]
             ]
     assertEqual "Grids should be equal" expectedBoard (board grid)
 
@@ -235,7 +179,7 @@ testApplyClick1 = TestCase $ do
 testApplyClick2 :: Test
 testApplyClick2 = TestCase $ do
     grid <- applyClick crushableGrid (Coordinate 0, Coordinate 0)
-    assertEqual "Grids should be equal" crushableGrid grid
+    assertEqual "Grids should be equal" (board crushableGrid) (board grid)
 
 testActions :: Test
 testActions = TestList [
@@ -277,8 +221,8 @@ testApplyAction3 = TestCase $ do
 
 testApplyAction4 :: Test
 testApplyAction4 = TestCase $ do
-    grid <- applyAction crushableGrid (Click (Coordinate 2, Coordinate 1))
-    assertEqual "Grids should be equal" crushableGrid grid
+    grid <- applyAction crushableGrid (Click (Coordinate 2, Coordinate 0))
+    assertEqual "Grids should be equal" (board crushableGrid) (board grid)
 
 testApplyAction5 :: Test
 testApplyAction5 = TestCase $ do
@@ -314,46 +258,7 @@ testApplyAction = TestList [
     TestLabel "applyAction6" testApplyAction6
   ]
 
--- testRedeemSpecialCandy :: Test
--- testRedeemSpecialCandy = TestList [
---     "Create a striped row candy with 4 candies" ~:
---         redeemSpecialCandy (Disappear [(0, 0), (0, 1), (0, 2), (0, 3)]) ~?=
---             Just stripedRowCandy,
---     "Create a bomb candy with 5 candies" ~:
---         redeemSpecialCandy (Disappear [(0, 0), (0, 1), (0, 2), (0, 3), (0, 4)]) ~?=
---             Just bombCandy,
---     "No special candy with fewer than 4 candies" ~:
---         redeemSpecialCandy (Disappear [(0, 0), (0, 1), (0, 2)]) ~?= Nothing
---   ]
-
--- Test fill empty cells with random candies
--- testFillRow :: Test
--- testFillRow = TestCase $ do
---     let row = [candy1, candy2, EmptyCandy]
---     newRow <- fillRow row [Circle , Square, Triangle, Heart]
---     assertBool "No empty candies" (EmptyCandy `notElem` newRow)
-
--- testFillBoard :: Test
--- testFillBoard = TestCase $ do
---     newBoard <- fillBoard (board gridWithEmptyCandy) [Circle, Square, Triangle, Heart, Star]
---     assertBool "No empty candies" (EmptyCandy `notElem` concat newBoard)
-
--- testFill :: Test
--- testFill = TestList [
---     TestLabel "fillRow" testFillRow,
---     TestLabel "fillBoard" testFillBoard
---   ]
-
 -- Test autoCrush related functions
--- testAllCoordinates :: Test
--- testAllCoordinates = TestCase $ do
---     let coords = allCoordinates crushableGrid
---     let expectedCoords = 
---             [(0, 0), (0, 1), (0, 2), 
---             (1, 0), (1, 1), (1, 2), 
---             (2, 0), (2, 1), (2, 2)]
---     assertEqual "Coordinates should be equal" expectedCoords coords
-
 expectedCrushables :: [Action]
 expectedCrushables
     = [Disappear [(Coordinate 0, Coordinate 0),
@@ -366,8 +271,8 @@ expectedCrushables
 
 testFinalAllCrushables :: Test
 testFinalAllCrushables = TestCase $ do
-    let allCrushables = findAllNormalCrushables crushableGrid
-    assertEqual "Crushables should be equal" expectedCrushables allCrushables
+    let allCrushables = sort $ findAllNormalCrushables crushableGrid
+    assertEqual "Crushables should be equal" (sort $ expectedCrushables) allCrushables
 
 testApplyActions :: Test
 testApplyActions = TestCase $ do
@@ -381,7 +286,7 @@ testApplyActions = TestCase $ do
 
 testAutoCrush :: Test
 testAutoCrush = TestCase $ do
-    crushedGrid <- autoCrush (return crushableGrid)
+    crushedGrid <- autoCrush crushableGrid
     let expectedBoard =
             [ [EmptyCandy, EmptyCandy, EmptyCandy]
             , [EmptyCandy, EmptyCandy, candy7]
@@ -391,8 +296,6 @@ testAutoCrush = TestCase $ do
 
 testAutoCrushRelated :: Test
 testAutoCrushRelated = TestList [
-    -- TestLabel "isNormalDisappear" testIsNormalDisappear,
-    -- TestLabel "allCoordinates" testAllCoordinates,
     TestLabel "finalAllCrushables" testFinalAllCrushables,
     TestLabel "applyActions" testApplyActions,
     TestLabel "autoCrush" testAutoCrush
@@ -438,16 +341,16 @@ prop_findNormalCandyCrushablesMatch d = monadicIO $ do
 prop_fillAndCrushUntilStable :: Difficulty -> Property
 prop_fillAndCrushUntilStable d = monadicIO $ do
     grid <- run $ generate $ genGameGrid d
-    stableGrid <- run $ fillAndCrushUntilStable (return grid) (normalCandies grid)
+    stableGrid <- run $ fillAndCrushUntilStable grid (normalCandies grid)
     -- there should be no immediate crushables in the stable grid
-    crushAgain <- run $ autoCrush (return stableGrid)
+    crushAgain <- run $ autoCrush stableGrid
     Test.QuickCheck.Monadic.assert $ board crushAgain == board stableGrid
 
 -- Property: fillAndCrushUntilStable should return a stable grid with empty emptyCandyCoords
 prop_fillAndCrushUntilStableEmptyCoords :: Difficulty -> Property
 prop_fillAndCrushUntilStableEmptyCoords d = monadicIO $ do
     grid <- run $ generate $ genGameGrid d
-    stableGrid <- run $ fillAndCrushUntilStable (return grid) (normalCandies grid)
+    stableGrid <- run $ fillAndCrushUntilStable grid (normalCandies grid)
     Test.QuickCheck.Monadic.assert $ null (emptyCandyCoords stableGrid)
 
 -- Property: Applying an action modifies step size correctly
@@ -491,11 +394,8 @@ runUnitTests = runTestTT $ TestList
         TestLabel "testConstructors" testConstructors,
         TestLabel "testParseAction" testParseAction,
         TestLabel "testSwapHelpers" testSwapHelpers,
-        -- TestLabel "testCrushHelpers" testCrushHelpers,
         TestLabel "testActions" testActions,
         TestLabel "testApplyAction" testApplyAction,
-        -- TestLabel "testRedeemSpecialCandy" testRedeemSpecialCandy,
-        -- TestLabel "testFill" testFill,
         TestLabel "testAutoCrushRelated" testAutoCrushRelated
     ]
 
