@@ -110,11 +110,12 @@ initialGrid = GameGrid
 crushableGrid :: GameGrid
 crushableGrid = GameGrid
     {   board =
-        [ [candy1, candy1, candy1]
-        , [candy2, candy2, candy2]
-        , [candy2, candy6, candy5]
+        [ [candy1, candy1, candy1, candy3]
+        , [candy2, candy2, candy2, candy2]
+        , [candy2, candy6, candy5, candy3]
+        , [candy3, candy2, candy1, candy1]
         ],
-        normalCandies = [candy1, candy2],
+        normalCandies = [candy1, candy2, candy3],
         specialCandies = Map.fromList [
             (4, [candy7]),
             (5, [candy5]),

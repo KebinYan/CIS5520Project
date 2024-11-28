@@ -51,8 +51,8 @@ computeRectanglePositions :: (Int, Int) -> Int -> Int -> [CoordinatePair]
 computeRectanglePositions (x, y) w h =
     let halfW = w `div` 2
         halfH = h `div` 2
-        widthRange = if odd w then [-halfW..halfW - 1] else [-halfW..halfW]
-        heightRange = if odd h then [-halfH..halfH - 1] else [-halfH..halfH]
+        widthRange = if even w then [-halfW..halfW - 1] else [-halfW..halfW]
+        heightRange = if even h then [-halfH..halfH - 1] else [-halfH..halfH]
     in [ (Coordinate (x + dx), Coordinate (y + dy)) |
         dx <- widthRange, dy <- heightRange]
 

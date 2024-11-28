@@ -9,6 +9,7 @@ import GameState
 import Candy
 import qualified Data.Set as Set
 import Data.List (sort)
+import Data.Sequence (Seq(Empty))
 
 -- Test contructDisappear: coordinates should be sorted
 testConstructDisappear :: Test
@@ -75,12 +76,12 @@ testFindNormalCandyCrushables1 = TestCase $ do
 
 testFindNormalCandyCrushables2 :: Test
 testFindNormalCandyCrushables2 = TestCase $ do
-    let crushables = findNormalCandyCrushables crushableGrid (Coordinate 1, Coordinate 0)
+    let crushables = findNormalCandyCrushables crushableGrid (Coordinate 1, Coordinate 1)
     let expectedCrushables = Just (Disappear
             [(Coordinate 1, Coordinate 0),
              (Coordinate 1, Coordinate 1),
              (Coordinate 1, Coordinate 2),
-             (Coordinate 2, Coordinate 0)])
+             (Coordinate 1, Coordinate 3)])
     assertEqual "Crushables should be equal" expectedCrushables crushables
 
 testFindNormalCandyCrushables3 :: Test
@@ -93,7 +94,7 @@ testFindCrushables1 :: Test
 testFindCrushables1 = TestCase $ do
     let crushables = findCrushables crushableGrid
             [(Coordinate 0, Coordinate 0),
-             (Coordinate 1, Coordinate 0),
+             (Coordinate 1, Coordinate 1),
              (Coordinate 2, Coordinate 2)]
     let expectedCrushables =
             [Disappear [(Coordinate 0, Coordinate 0),
@@ -102,7 +103,7 @@ testFindCrushables1 = TestCase $ do
              Disappear [(Coordinate 1, Coordinate 0),
                         (Coordinate 1, Coordinate 1),
                         (Coordinate 1, Coordinate 2),
-                        (Coordinate 2, Coordinate 0)],
+                        (Coordinate 1, Coordinate 3)],
              Trigger ((Coordinate 2, Coordinate 2), candy5)]
     assertEqual "Crushables should be equal" expectedCrushables crushables
 
@@ -133,9 +134,10 @@ testApplyDisappear = TestCase $ do
         (Coordinate 0, Coordinate 1),
         (Coordinate 0, Coordinate 2)]
     let expectedBoard =
-            [ [EmptyCandy, EmptyCandy, EmptyCandy]
-            , [candy2, candy2, candy2]
-            , [candy2, candy6, candy5]
+            [ [EmptyCandy, EmptyCandy, EmptyCandy, candy3]
+            , [candy2, candy2, candy2, candy2]
+            , [candy2, candy6, candy5, candy3]
+            , [candy3, candy2, candy1, candy1]
             ]
     assertEqual "Grids should be equal" expectedBoard (board grid)
 
@@ -143,9 +145,10 @@ testApplyTrigger :: Test
 testApplyTrigger = TestCase $ do
     grid <- applyTrigger crushableGrid (Coordinate 2, Coordinate 2) candy5
     let expectedBoard =
-            [ [candy1, candy1, candy1]
-            , [candy2, EmptyCandy, EmptyCandy]
-            , [candy2, EmptyCandy, EmptyCandy]
+            [ [candy1, candy1, candy1, candy3]
+            , [candy2, EmptyCandy, EmptyCandy, EmptyCandy]
+            , [candy2, EmptyCandy, EmptyCandy, EmptyCandy]
+            , [candy3, EmptyCandy, EmptyCandy, EmptyCandy]
             ]
     assertEqual "Grids should be equal" expectedBoard (board grid)
 
@@ -170,9 +173,10 @@ testApplyClick1 :: Test
 testApplyClick1 = TestCase $ do
     grid <- applyClick crushableGrid (Coordinate 2, Coordinate 2)
     let expectedBoard =
-            [ [candy1, candy1, candy1]
-            , [candy2, EmptyCandy, EmptyCandy]
-            , [candy2, EmptyCandy, EmptyCandy]
+            [ [candy1, candy1, candy1, candy3]
+            , [candy2, EmptyCandy, EmptyCandy, EmptyCandy]
+            , [candy2, EmptyCandy, EmptyCandy, EmptyCandy]
+            , [candy3, EmptyCandy, EmptyCandy, EmptyCandy]
             ]
     assertEqual "Grids should be equal" expectedBoard (board grid)
 
@@ -213,9 +217,10 @@ testApplyAction3 :: Test
 testApplyAction3 = TestCase $ do
     grid <- applyAction crushableGrid (Click (Coordinate 2, Coordinate 2))
     let expectedBoard =
-            [ [candy1, candy1, candy1]
-            , [candy2, EmptyCandy, EmptyCandy]
-            , [candy2, EmptyCandy, EmptyCandy]
+            [ [candy1, candy1, candy1, candy3]
+            , [candy2, EmptyCandy, EmptyCandy, EmptyCandy]
+            , [candy2, EmptyCandy, EmptyCandy, EmptyCandy]
+            , [candy3, EmptyCandy, EmptyCandy, EmptyCandy]
             ]
     assertEqual "Grids should be equal" expectedBoard (board grid)
 
@@ -229,9 +234,10 @@ testApplyAction5 = TestCase $ do
     grid <- applyAction crushableGrid 
         (Trigger ((Coordinate 2, Coordinate 2), candy5))
     let expectedBoard =
-            [ [candy1, candy1, candy1]
-            , [candy2, EmptyCandy, EmptyCandy]
-            , [candy2, EmptyCandy, EmptyCandy]
+            [ [candy1, candy1, candy1, candy3]
+            , [candy2, EmptyCandy, EmptyCandy, EmptyCandy]
+            , [candy2, EmptyCandy, EmptyCandy, EmptyCandy]
+            , [candy3, EmptyCandy, EmptyCandy, EmptyCandy]
             ]
     assertEqual "Grids should be equal" expectedBoard (board grid)
 
@@ -242,9 +248,10 @@ testApplyAction6 = TestCase $ do
             (Coordinate 0, Coordinate 1),
             (Coordinate 0, Coordinate 2)])
     let expectedBoard =
-            [ [EmptyCandy, EmptyCandy, EmptyCandy]
-            , [candy2, candy2, candy2]
-            , [candy2, candy6, candy5]
+            [ [EmptyCandy, EmptyCandy, EmptyCandy, candy3]
+            , [candy2, candy2, candy2, candy2]
+            , [candy2, candy6, candy5, candy3]
+            , [candy3, candy2, candy1, candy1]
             ]
     assertEqual "Grids should be equal" expectedBoard (board grid)
 
@@ -267,20 +274,21 @@ expectedCrushables
        Disappear [(Coordinate 1, Coordinate 0),
                 (Coordinate 1, Coordinate 1),
                 (Coordinate 1, Coordinate 2),
-                (Coordinate 2, Coordinate 0)]]
+                (Coordinate 1, Coordinate 3)]]
 
 testFinalAllCrushables :: Test
 testFinalAllCrushables = TestCase $ do
     let allCrushables = sort $ findAllNormalCrushables crushableGrid
-    assertEqual "Crushables should be equal" (sort $ expectedCrushables) allCrushables
+    assertEqual "Crushables should be equal" (sort expectedCrushables) allCrushables
 
 testApplyActions :: Test
 testApplyActions = TestCase $ do
     grid <- applyActions crushableGrid expectedCrushables
     let expectedBoard =
-            [ [EmptyCandy, EmptyCandy, EmptyCandy]
-            , [EmptyCandy, EmptyCandy, candy7]
-            , [EmptyCandy, candy6, candy5]
+            [ [EmptyCandy, EmptyCandy, EmptyCandy, candy3]
+            , [EmptyCandy, EmptyCandy, candy7, EmptyCandy]
+            , [candy2, candy6, candy5, candy3]
+            , [candy3, candy2, candy1, candy1]
             ]
     assertEqual "Grids should be equal" expectedBoard (board grid)
 
@@ -288,9 +296,10 @@ testAutoCrush :: Test
 testAutoCrush = TestCase $ do
     crushedGrid <- autoCrush crushableGrid
     let expectedBoard =
-            [ [EmptyCandy, EmptyCandy, EmptyCandy]
-            , [EmptyCandy, EmptyCandy, candy7]
-            , [EmptyCandy, candy6, candy5]
+            [ [EmptyCandy, EmptyCandy, EmptyCandy, candy3]
+            , [EmptyCandy, EmptyCandy, candy7, EmptyCandy]
+            , [candy2, candy6, candy5, candy3]
+            , [candy3, candy2, candy1, candy1]
             ]
     assertEqual "Grids should be equal" expectedBoard (board crushedGrid)
 
