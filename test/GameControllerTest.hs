@@ -145,9 +145,9 @@ testApplyTrigger :: Test
 testApplyTrigger = TestCase $ do
     grid <- applyTrigger crushableGrid (Coordinate 2, Coordinate 2) candy5
     let expectedBoard =
-            [ [candy1, candy1, candy1, candy3]
+            [ [candy1, EmptyCandy, candy1, candy3]
             , [candy2, EmptyCandy, EmptyCandy, EmptyCandy]
-            , [candy2, EmptyCandy, EmptyCandy, EmptyCandy]
+            , [EmptyCandy, EmptyCandy, EmptyCandy, EmptyCandy]
             , [candy3, EmptyCandy, EmptyCandy, EmptyCandy]
             ]
     assertEqual "Grids should be equal" expectedBoard (board grid)
@@ -171,11 +171,11 @@ testSwapCrush = TestCase $ do
 
 testApplyClick1 :: Test
 testApplyClick1 = TestCase $ do
-    grid <- applyClick crushableGrid (Coordinate 2, Coordinate 2)
+    grid <- applyClick crushableGrid (Coordinate 2, Coordinate 1)
     let expectedBoard =
-            [ [candy1, candy1, candy1, candy3]
+            [ [candy1, EmptyCandy, candy1, candy3]
             , [candy2, EmptyCandy, EmptyCandy, EmptyCandy]
-            , [candy2, EmptyCandy, EmptyCandy, EmptyCandy]
+            , [EmptyCandy, EmptyCandy, EmptyCandy, EmptyCandy]
             , [candy3, EmptyCandy, EmptyCandy, EmptyCandy]
             ]
     assertEqual "Grids should be equal" expectedBoard (board grid)
@@ -217,9 +217,9 @@ testApplyAction3 :: Test
 testApplyAction3 = TestCase $ do
     grid <- applyAction crushableGrid (Click (Coordinate 2, Coordinate 2))
     let expectedBoard =
-            [ [candy1, candy1, candy1, candy3]
+            [ [candy1, EmptyCandy, candy1, candy3]
             , [candy2, EmptyCandy, EmptyCandy, EmptyCandy]
-            , [candy2, EmptyCandy, EmptyCandy, EmptyCandy]
+            , [EmptyCandy, EmptyCandy, EmptyCandy, EmptyCandy]
             , [candy3, EmptyCandy, EmptyCandy, EmptyCandy]
             ]
     assertEqual "Grids should be equal" expectedBoard (board grid)
@@ -232,11 +232,11 @@ testApplyAction4 = TestCase $ do
 testApplyAction5 :: Test
 testApplyAction5 = TestCase $ do
     grid <- applyAction crushableGrid 
-        (Trigger ((Coordinate 2, Coordinate 2), candy5))
+        (Trigger ((Coordinate 2, Coordinate 1), candy6))
     let expectedBoard =
-            [ [candy1, candy1, candy1, candy3]
+            [ [candy1, EmptyCandy, candy1, candy3]
             , [candy2, EmptyCandy, EmptyCandy, EmptyCandy]
-            , [candy2, EmptyCandy, EmptyCandy, EmptyCandy]
+            , [EmptyCandy, EmptyCandy, EmptyCandy, EmptyCandy]
             , [candy3, EmptyCandy, EmptyCandy, EmptyCandy]
             ]
     assertEqual "Grids should be equal" expectedBoard (board grid)

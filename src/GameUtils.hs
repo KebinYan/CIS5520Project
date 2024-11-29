@@ -37,7 +37,7 @@ generateSpecialEffect candy coord board =
                     Arbitrary coords ->
                         computeArbitraryPositions
                             (length board, length (head board)) (x, y) coords
-            in foldl clearPosition board positionsToClear
+            in foldl clearPosition board (coord : positionsToClear)
         _ -> error ("Invalid candy coordinate: " ++ show coord)
 
 -- Compute the positions to clear for a circle effect
@@ -85,8 +85,17 @@ computeArbitraryPositions (nRows, nCols) (x, y) =
 
 -- Clear a candy at a given coordinate
 clearPosition :: [[Candy]] -> CoordinatePair -> [[Candy]]
-clearPosition board (Coordinate x, Coordinate y) =
-    setCandyAt board (Coordinate x, Coordinate y) EmptyCandy
+clearPosition board coord@(Coordinate x, Coordinate y)
+    | not (validCoordinate board coord) = board
+    | otherwise =
+        case getCandyAt board coord of
+            Nothing -> board
+            Just EmptyCandy -> board
+            Just candy ->
+                let newBoard = setCandyAt board coord EmptyCandy
+                in case effectName (candyEffect candy) of
+                    "Normal" -> newBoard
+                    _ -> generateSpecialEffect candy coord newBoard
 clearPosition board _ = board
 
 -- Check if a coordinate is valid

@@ -139,6 +139,17 @@ testClearPosition = TestCase $ do
             ]
     assertEqual "Grids should be equal" expectedBoard grid
 
+testClearPositionWithSpecialEffect :: Test
+testClearPositionWithSpecialEffect = TestCase $ do
+    let grid = clearPosition (board crushableGrid) (Coordinate 2, Coordinate 2)
+    let expectedBoard = 
+            [ [candy1, EmptyCandy, candy1, candy3]
+            , [candy2, EmptyCandy, EmptyCandy, EmptyCandy]
+            , [EmptyCandy, EmptyCandy, EmptyCandy, EmptyCandy]
+            , [candy3, EmptyCandy, EmptyCandy, EmptyCandy]
+            ]
+    assertEqual "Grids should be equal" expectedBoard grid
+
 testValidCoordinate :: Test
 testValidCoordinate = TestCase $ do
     assertBool "Valid coordinate" (validCoordinate (board initialGrid) (Coordinate 0, Coordinate 0))
@@ -218,9 +229,11 @@ prop_noUnintendedModifications d = monadicIO $ do
             Circle r -> computeCirclePositions (getCoord coord) r
             Rectangle w h -> computeRectanglePositions (getCoord coord) w h
             Diamond r -> computeDiamondPositions (getCoord coord) r
-            Arbitrary coords -> computeArbitraryPositions (length board, length (head board)) (getCoord coord) coords
+            Arbitrary coords -> 
+                computeArbitraryPositions (length board, length (head board)) 
+                (getCoord coord) coords
         unaffectedPositions =
-            filter (`notElem` positionsToClear) (allCoordinates board)
+            filter (`notElem` (coord : positionsToClear)) (allCoordinates board)
     boardAfterEffect <-
         run $ return (generateSpecialEffect specialCandy coord board)
     let unaffectedCandies = map (getCandyAt board) unaffectedPositions
@@ -261,6 +274,18 @@ prop_specialEffectAssociativity d = monadicIO $ do
         board2 = generateSpecialEffect candy2 coord2
             (generateSpecialEffect candy1 coord1 board)
     Test.QuickCheck.Monadic.assert $ board1 == board2
+
+-- Property: Applying generateSpecialEffect is equivalent to applying clearPosition
+-- if the candy at the coordinate is a special candy
+prop_specialEffectEquivalent :: Difficulty -> Property
+prop_specialEffectEquivalent d = monadicIO $ do
+    grid <- run $ generate (genGameGrid d)
+    coord <- run $ generate (genArbIntCoordPair d)
+    specialCandy <- run $ generate (genArbSpecialCandy d)
+    let updatedBoard = setCandyAt (board grid) coord specialCandy
+        boardAfterEffect = generateSpecialEffect specialCandy coord updatedBoard
+        boardAfterClear = clearPosition updatedBoard coord
+    Test.QuickCheck.Monadic.assert $ boardAfterEffect == boardAfterClear
 
 -- Property: No EmptyCandy remains after applying generateSpecialEffect and fillBoard
 prop_noEmptyCandyAfterFill :: Difficulty -> Property
@@ -309,6 +334,7 @@ runUnitTests = runTestTT $ TestList [
     TestLabel "testSetCandyAtBoundary" testSetCandyAtBoundary,
     TestLabel "testGetCandyAtBoundary" testGetCandyAtBoundary,
     TestLabel "testClearPosition" testClearPosition,
+    TestLabel "testClearPositionWithSpecialEffect" testClearPositionWithSpecialEffect,
     TestLabel "testValidCoordinate" testValidCoordinate,
     TestLabel "testRedeemSpecialCandy" testRedeemSpecialCandy,
     TestLabel "testFillRow" testFillRow,
@@ -328,6 +354,8 @@ runQuickCheckTests = do
     quickCheck prop_specialEffectIdempotency
     putStrLn "prop_specialEffectAssociativity:"
     quickCheck prop_specialEffectAssociativity
+    putStrLn "prop_specialEffectEquivalent:"
+    quickCheck prop_specialEffectEquivalent
     putStrLn "prop_noEmptyCandyAfterFill:"
     quickCheck prop_noEmptyCandyAfterFill
     putStrLn "prop_setGetCandyAt:"
