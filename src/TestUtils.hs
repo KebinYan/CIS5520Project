@@ -103,8 +103,7 @@ initialGrid = GameGrid
         specialCandies = Map.fromList [
             (4, [candy6]),
             (5, [candy5])
-        ],
-        emptyCandyCoords = []
+        ]
     }
 
 crushableGrid :: GameGrid
@@ -122,8 +121,7 @@ crushableGrid = GameGrid
             (5, [candy6]),
             (6, [candy6]),
             (7, [candy6])
-        ],
-        emptyCandyCoords = []
+        ]
     }
 
 gridWithEmptyCandy :: GameGrid
@@ -138,12 +136,6 @@ gridWithEmptyCandy = GameGrid
         specialCandies = Map.fromList [
             (4, [candy6]),
             (5, [candy5])
-        ],
-        emptyCandyCoords = [
-            (Coordinate 1, Coordinate 1),
-            (Coordinate 1, Coordinate 2),
-            (Coordinate 2, Coordinate 1),
-            (Coordinate 2, Coordinate 2)
         ]
     }
 
@@ -233,8 +225,7 @@ genGameGrid d =
     in GameGrid <$>
         genGameBoard d normalCandies <*>
         normalCandies <*>
-        genSpecialCandyMap d <*>
-        genEmptyCandyCoords d
+        genSpecialCandyMap d
 
 genGameState :: Difficulty -> Gen GameState
 genGameState d = GameState <$>

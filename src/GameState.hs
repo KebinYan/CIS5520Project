@@ -163,20 +163,18 @@ hard = Difficulty {
 data GameGrid = GameGrid {
         board :: [[Candy]],
         normalCandies :: [Candy],
-        specialCandies :: Map Int [Candy],
-        emptyCandyCoords :: [CoordinatePair]
+        specialCandies :: Map Int [Candy]
     }
   deriving (Show)
 
 -- check if two boards are equal
 instance Eq GameGrid where
     (==) :: GameGrid -> GameGrid -> Bool
-    (GameGrid board1 normalCandies1 specialCandies1 emptyCandyCoords1) ==
-        (GameGrid board2 normalCandies2 specialCandies2 emptyCandyCoords2) =
+    (GameGrid board1 normalCandies1 specialCandies1) ==
+        (GameGrid board2 normalCandies2 specialCandies2) =
         board1 == board2
         && normalCandies1 == normalCandies2
         && specialCandies1 == specialCandies2
-        && emptyCandyCoords1 == emptyCandyCoords2
 
 -- The game state includes the current grid, difficulty level, history for undo, and remaining steps
 data GameState = GameState {
@@ -198,8 +196,7 @@ initializeGrid d = do
     return $ GameGrid {
         board = splitIntoRows dim candiesInBoard,
         normalCandies = normalCandies,
-        specialCandies = extractSpecialCandies dim (candies d),
-        emptyCandyCoords = []
+        specialCandies = extractSpecialCandies dim (candies d)
     }
 
 -- Split a list into rows of a given length
@@ -247,13 +244,6 @@ undoStep = modify $ \s -> case lastGrid s of
 getRemainingSteps :: GameMonad Int
 getRemainingSteps = gets remainingSteps
 
--- Get the emptyCandyCoords
-getEmptyCandyCoords :: GameGrid -> [CoordinatePair]
-getEmptyCandyCoords (GameGrid _ _ _ emptyCandyCoords) = emptyCandyCoords
-
-updateEmptyCandyCoords :: [CoordinatePair] -> GameGrid -> GameGrid
-updateEmptyCandyCoords coords g = g { emptyCandyCoords = coords }
-
 -- Add to the score
 addScore :: Int -> GameMonad ()
 addScore points = modify $ \s -> s { score = score s + points }
@@ -264,7 +254,7 @@ undoable = gets (isJust . lastGrid)
 
 -- Function to format and print the board beautifully
 printGrid :: GameGrid -> IO ()
-printGrid (GameGrid board _ _ _) = do
+printGrid (GameGrid board _ _) = do
     let dim = length board
     putStrLn $ "  " ++ unwords (map show [0..(dim - 1)]) -- print column numbers
     zipWithM_ printRow [0..] board  -- print each row with row numbers

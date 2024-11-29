@@ -355,13 +355,6 @@ prop_fillAndCrushUntilStable d = monadicIO $ do
     crushAgain <- run $ autoCrush stableGrid
     Test.QuickCheck.Monadic.assert $ board crushAgain == board stableGrid
 
--- Property: fillAndCrushUntilStable should return a stable grid with empty emptyCandyCoords
-prop_fillAndCrushUntilStableEmptyCoords :: Difficulty -> Property
-prop_fillAndCrushUntilStableEmptyCoords d = monadicIO $ do
-    grid <- run $ generate $ genGameGrid d
-    stableGrid <- run $ fillAndCrushUntilStable grid (normalCandies grid)
-    Test.QuickCheck.Monadic.assert $ null (emptyCandyCoords stableGrid)
-
 -- Property: Applying an action modifies step size correctly
 prop_actionStepSize :: Difficulty -> Property
 prop_actionStepSize d = monadicIO $ do
@@ -419,14 +412,12 @@ runQuickCheckTests = do
     quickCheck prop_findNormalCandyCrushablesMatch
     putStrLn "prop_fillAndCrushUntilStable:"
     quickCheck prop_fillAndCrushUntilStable
-    putStrLn "prop_fillAndCrushUntilStableEmptyCoords:"
-    quickCheck prop_fillAndCrushUntilStableEmptyCoords
     putStrLn "prop_actionStepSize:"
     quickCheck prop_actionStepSize
     putStrLn "prop_undoRestoresGrid:"
     quickCheck prop_undoRestoresGrid
 
-main :: IO ()
-main = do
-    runUnitTests >>= print
-    runQuickCheckTests
+-- main :: IO ()
+-- main = do
+--     runUnitTests >>= print
+--     runQuickCheckTests

@@ -169,7 +169,7 @@ applyAction g (Click (x, y)) = applyClick g (x, y)
 applyAction g _ = return g
 
 applySwap :: GameGrid -> CoordinatePair -> CoordinatePair -> IO GameGrid
-applySwap g@(GameGrid board _ _ _)
+applySwap g@(GameGrid board _ _)
           coord1@(Coordinate x1, Coordinate y1)
           coord2@(Coordinate x2, Coordinate y2)
     | not (validCoordinate board coord1) || not (validCoordinate board coord2) = return g
@@ -183,7 +183,7 @@ applySwap g@(GameGrid board _ _ _)
 applySwap g _ _ = return g
 
 swapCandies :: GameGrid -> CoordinatePair -> CoordinatePair -> GameGrid
-swapCandies g@(GameGrid board _ _ _) (x1, y1) (x2, y2) =
+swapCandies g@(GameGrid board _ _) (x1, y1) (x2, y2) =
     let c1 = getCandyAt board (x1, y1)
         c2 = getCandyAt board (x2, y2)
         newGrid = case (c1, c2) of
@@ -269,7 +269,7 @@ findNormalCandyCrushables grid coord@(Coordinate x, Coordinate y) =
 findNormalCandyCrushables _ _ = Nothing
 
 applyClick :: GameGrid -> CoordinatePair -> IO GameGrid
-applyClick g@(GameGrid board _ _ _) coord
+applyClick g@(GameGrid board _ _) coord
     | not (validCoordinate board coord) = return g
     | otherwise =
         let candy = getCandyAt board coord
@@ -279,7 +279,7 @@ applyClick g@(GameGrid board _ _ _) coord
             _ -> return g
 
 applyDisappear :: GameGrid -> [CoordinatePair] -> IO GameGrid
-applyDisappear g@(GameGrid board _ specialCandies _) coords = do
+applyDisappear g@(GameGrid board _ specialCandies) coords = do
     let clearBoard = foldl clearPosition board coords
         disappearCoords = extractDisappearCoords (Disappear coords)
     specialCandy <- redeemSpecialCandy (length disappearCoords) specialCandies
@@ -295,7 +295,7 @@ extractDisappearCoords (Disappear coords) = coords
 extractDisappearCoords _ = []
 
 applyTrigger :: GameGrid -> CoordinatePair -> Candy -> IO GameGrid
-applyTrigger g@(GameGrid board _ _ _) coord candy = do
+applyTrigger g@(GameGrid board _ _) coord candy = do
     let newBoard = generateSpecialEffect candy coord board
     return $ updateBoard newBoard g
 
@@ -311,11 +311,10 @@ fillAndCrushUntilStable grid candies = do
     -- Fill the grid with random candies
     newBoard <- fillBoard (board grid) candies
     let filledGrid = updateBoard newBoard grid
-        updatedGrid = updateEmptyCandyCoords [] filledGrid
     -- Auto-crush all crushable candies
-    newGrid <- autoCrush updatedGrid
+    newGrid <- autoCrush filledGrid
     -- If there are still crushable candies, repeat the process
-    if board newGrid == board updatedGrid
+    if board newGrid == board filledGrid
     then return newGrid
     else fillAndCrushUntilStable newGrid candies
 
@@ -329,7 +328,7 @@ autoCrush g = do
 
 -- Find all crushable candies in the board
 findAllNormalCrushables :: GameGrid -> [Action]
-findAllNormalCrushables g@(GameGrid board _ _ _) =
+findAllNormalCrushables g@(GameGrid board _ _) =
     processCoords (allCoordinates board) Set.empty []
     where
         processCoords :: [CoordinatePair] -> Set.Set CoordinatePair -> [Action] -> [Action]

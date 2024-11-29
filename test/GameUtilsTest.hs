@@ -361,7 +361,7 @@ runQuickCheckTests = do
     putStrLn "prop_setGetCandyAt:"
     quickCheck prop_setGetCandyAt
 
-main :: IO ()
-main = do
-    runUnitTests >>= print
-    runQuickCheckTests
+-- main :: IO ()
+-- main = do
+--     runUnitTests >>= print
+--     runQuickCheckTests

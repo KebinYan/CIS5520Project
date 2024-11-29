@@ -15,7 +15,6 @@ testInitializeGrid = TestCase $ do
     let dim = dimension hard
     assertEqual "Grid dimensions match" dim (length (board grid))
     assertEqual "Grid initialized with correct normal candies" (dim * dim) (length (concat (board grid)))
-    assertEqual "Empty candy coordinates initially empty" [] (emptyCandyCoords grid)
 
 testSplitIntoRows :: Test
 testSplitIntoRows = TestCase $ do
@@ -57,16 +56,6 @@ testGetRemainingSteps = TestCase $ do
         initialState = GameState grid easy Nothing 50 0
     remainingSteps <- evalStateT getRemainingSteps initialState
     assertEqual "Get remaining steps" 50 remainingSteps
-
-testGetEmptyCandyCoords :: Test
-testGetEmptyCandyCoords = TestCase $ do
-    let grid = gridWithEmptyCandy
-    assertEqual "Get empty candy coordinates" [
-            (Coordinate 1, Coordinate 1),
-            (Coordinate 1, Coordinate 2),
-            (Coordinate 2, Coordinate 1),
-            (Coordinate 2, Coordinate 2)
-        ] (getEmptyCandyCoords grid)
 
 testAddScore :: Test
 testAddScore = TestCase $ do
@@ -141,7 +130,6 @@ runUnitTests = runTestTT $
         TestLabel "testUpdateGridState" testUpdateGridState,
         TestLabel "testUndoStep" testUndoStep,
         TestLabel "testGetRemainingSteps" testGetRemainingSteps,
-        TestLabel "testGetEmptyCandyCoords" testGetEmptyCandyCoords,
         TestLabel "testAddScore" testAddScore,
         TestLabel "testUndoable" testUndoable,
         TestLabel "testAddScoreAccumulation" testAddScoreAccumulation
@@ -165,7 +153,7 @@ runQuickCheckTests = do
     putStrLn "prop_undoOnce:"
     quickCheck prop_undoOnce
 
-main :: IO ()
-main = do
-    runUnitTests >>= print
-    runQuickCheckTests
+-- main :: IO ()
+-- main = do
+--     runUnitTests >>= print
+--     runQuickCheckTests
