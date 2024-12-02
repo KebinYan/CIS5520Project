@@ -1,5 +1,0 @@
-Shape Name      Parameters                                                                                                                                                     Effect Range Calculation
-    Circle          radius                                                                                                               Includes all positions (dx, dy) where dx^2 + dy^2 <= radius^2.
- Rectangle   width, height Width = 1: All columns in current row.\nWidth even: Expand equally above/below, prioritizing upward.\nWidth odd: Symmetric above/below.\nHeight = ':': Covers entire column.
-   Diamond          radius                                                                                                                 Includes all positions (dx, dy) where |dx| + |dy| <= radius.
- Arbitrary list of offsets                                  Directly uses the provided offsets (dx, dy):\nx > 0: Downward, x < 0: Upward.\ny > 0: Rightward, y < 0: Leftward.\n(0, 0): Always included.

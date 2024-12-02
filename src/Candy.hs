@@ -29,13 +29,24 @@ data EffectRange
     | Arbitrary [CoordinatePair]
     deriving (Show, Eq)
 
-data Operator = Eq | Gt | Ge deriving (Show, Eq)
-data Requirement = Requirement Operator Int deriving (Show, Eq)
+data Operator = Eq | Gt | Ge | Lt | Le deriving (Show, Eq)
+data EffectRequirement = EffectRequirement Operator Int deriving (Show, Eq)
+operatorMapping :: [(String, Operator)]
+operatorMapping =
+  [ (">=", Ge)
+  , (">", Gt)
+  , ("<=", Le)
+  , ("<", Lt)
+  , ("=", Eq)
+  ]
+allowedEffectReqOperators :: [Operator]
+allowedEffectReqOperators = [Eq, Gt, Ge]
+
 
 data Effect = Effect
     { effectName        :: String
     , effectRange       :: EffectRange
-    , effectRequirement :: Requirement
+    , effectRequirement :: EffectRequirement
     , effectDescription :: String
     } deriving (Show, Eq)
 
