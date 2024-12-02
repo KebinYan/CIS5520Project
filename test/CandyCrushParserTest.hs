@@ -6,6 +6,31 @@ import Data.Map (empty)
 import Data.Map qualified as Map
 
 
+-- assert that the result is a success and the expected value is returned
+assertIsSuccess :: (Show a, Eq b, Show b) => Either a b -> b -> String -> IO ()
+assertIsSuccess result expected errMsg =
+  case result of
+    Right x | x == expected -> return () -- parsing successful and expected value returned
+            | otherwise -> error $ errMsg ++ ", but got: " ++ show x
+    Left e -> error $ errMsg ++ ", but got error: " ++ show e
+
+-- assert that the result is a fatal error
+assertIsFatalError :: (Show b) => Either ParseError b -> String -> IO ()
+assertIsFatalError result errMsg =
+  case result of
+    Left (FatalError _ _) -> return () -- fatal error, test passed
+    Left (FailError e line) -> error $ errMsg ++ ", but got fail error at line " ++ show line ++ ": " ++ e
+    Right x -> error $ errMsg ++ ", but got: " ++ show x
+
+-- assert that the result is a fail error
+assertIsFailError :: (Show b) => Either ParseError b -> String -> IO ()
+assertIsFailError result errMsg =
+  case result of
+    Left (FailError _ _) -> return () -- fail error, test passed
+    Left (FatalError e line) -> error $ errMsg ++ ", but got fatal error at line " ++ show line ++ ": " ++ e
+    Right x -> error $ errMsg ++ ", but got: " ++ show x
+
+
 testIntP :: Test
 testIntP = TestList
   [ "Valid positive integer" ~: TestCase $ assertIsSuccess
@@ -118,6 +143,14 @@ testConstP = TestList [
             _                  -> assertFailure "Expected a FailError for mismatched constant"
     ]
 
+testStripP :: Test 
+testStripP = TestList
+    [ "stripP" ~: do
+        let input = "  hello \n "
+        let expected = "hello"
+        let actual = doParse (stripP (pure input)) (ParseState "" 1 emptyDifficulty)
+        actual ~?= Right (expected, ParseState "" 1 emptyDifficulty)
+    ]
 
 testString :: Test
 testString = TestList [
@@ -429,8 +462,9 @@ testEffectDescriptionP = TestList
   [ "Valid effect description" ~:
       doParse effectDescriptionP (ParseState "effect_description: Clears the row\n" 1 emptyDifficulty)
       ~?= Right ("Clears the row", ParseState "" 2 emptyDifficulty)
-    , "Missing effect description" ~: doParse effectDescriptionP (ParseState "effect_description: \n" 1 emptyDifficulty)
-        ~?= Right ("", ParseState "" 2 emptyDifficulty)
+    , "Missing effect description" ~: assertIsFatalError
+        (doParse effectDescriptionP (ParseState "effect_description: \n" 1 emptyDifficulty))
+        "Expected a FatalError for missing effect description"
     , "Missing newline" ~: assertIsFatalError
         (doParse effectDescriptionP (ParseState "effect_description: Clears the row" 1 emptyDifficulty))
         "Expected a FatalError for missing newline"
@@ -1021,6 +1055,7 @@ testCandies = TestList
   , testInvalidCandyP
   , testCandiesP
   ]
+
 allParserUnitTests :: Test
 allParserUnitTests = TestList
     [ testIntP
@@ -1029,6 +1064,7 @@ allParserUnitTests = TestList
     , testSepBy1
     , testString
     , testStringP
+    , testStripP
     , testParens
     , testEmptyLine
     , testCommentLine

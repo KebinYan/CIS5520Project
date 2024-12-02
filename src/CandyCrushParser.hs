@@ -18,9 +18,6 @@ import Constants
 import Candy
 import qualified Constants as Constant
 import Control.Exception (IOException, try)
---------------------------------------------------------------------------------
-import System.IO
-import System.IO.Unsafe (unsafePerformIO)
 
 type Name = String
 -- Difficulty level
@@ -82,7 +79,7 @@ fatalError msg = P $ \state -> Left (FatalError (msg ++ "\n" ++ show state)  (li
 
 fatalErrorWithExpectStr :: String -> String -> Int -> Parser a
 fatalErrorWithExpectStr msg expectStr len = P $ \state ->
-    Left (FatalError (msg ++ " expected: `" ++ expectStr ++ "`, but got `" ++ peekStr len state ++ "`" ++ "\n" ++ show state) 
+    Left (FatalError (msg ++ " expected: `" ++ expectStr ++ "`, but got `" ++ peekStr len state ++ "`" ++ "\n" ++ show state)
     (lineNum state))
 
 -- 抛出可恢复错误，包含行号
@@ -91,7 +88,7 @@ failError msg = P $ \state -> Left (FailError msg (lineNum state))
 
 failErrorWithExpectStr :: String -> String -> Int -> Parser a
 failErrorWithExpectStr  msg expectStr len = P $ \state ->
-    Left (FailError (msg ++ ", expected: `" ++ expectStr ++ "`, but got `" ++ peekStr len state ++ "`") 
+    Left (FailError (msg ++ ", expected: `" ++ expectStr ++ "`, but got `" ++ peekStr len state ++ "`")
     (lineNum state))
 
 -- | Update a parser to upgrade FailError to FatalError
@@ -113,11 +110,17 @@ upgradeToFatalIfFirstSucceeds errorMsg conditionParser mainParser = do
 wsP :: Parser a -> Parser a
 wsP p = many space *> p <* many space
 
--- | Combine two Maybe values together, producing the first
--- successful result
-firstJust :: Maybe a -> Maybe a -> Maybe a
-firstJust (Just x) _ = Just x
-firstJust Nothing  y = y
+
+strip :: String -> String
+strip = reverse . dropWhile isSpace . reverse . dropWhile isSpace
+
+stripP :: Parser String -> Parser String
+stripP p = do
+    result <- p
+    let stripped = strip result
+    if null stripped
+        then failError "empty string after stripping"
+        else return stripped
 
 -- | Return the next character from the input
 get :: Parser Char
@@ -188,7 +191,7 @@ intP = do
     then fatalError "Unexpected EOF in intP"
     else do
       sign <- optional (char '-')                     -- 可选负号
-      digits <- some digit <|> fatalError "Missing digits in intP"  -- 至少一个数字
+      digits <- some digit <|> fatalErrorWithExpectStr "intP()" "a digit" 1
       nextChar <- peek 1                              -- 查看下一个字符
       let numStr = maybe "" (:[]) sign ++ digits      -- 组合成完整数字字符串
       if null nextChar || isSpace (head nextChar) || isDelim (head nextChar)
@@ -247,34 +250,6 @@ expectString str = expect str (void $ string str)
 expectStringIgnoreCase :: String -> Parser ()
 expectStringIgnoreCase str = expect str (void $ stringIgnoreCase str)
 
--- expectVerbose :: String -> Parser () -> Parser ()
--- expectVerbose str p = P $ \state -> do
---     traceToFile ("Expecting string: " ++ str) (Right ((), state))  -- Log when expecting a specific string
---     case doParse p state of
---         Right (_, _) -> do
---             traceToFile ("Successfully matched: " ++ str) (Right ((), state))  -- Log success when string matches
---             Right ((), state)  -- Only check if the string is present, do not change the state
---         Left (FailError _ _) -> do
---             traceToFile ( "Failed to match: " ++ str) (Left (FailError ("Expected " ++ str) (lineNum state)))  -- Show failure
---             Left (FailError ("Expected " ++ str) (lineNum state))  -- Show failure
---         Left fatalError -> do
---             traceToFile ("Fatal error while expecting: " ++ str) (Left fatalError)  -- Log fatal error
---             Left fatalError
-
--- -- | Same as `constP` but does not consume input or change the state
--- expectStringVerbose :: String -> Parser ()
--- expectStringVerbose str = do
---     logTrace $ "Starting to expect string: " ++ str  -- Log the start of string expectation
---     expect str (void $ string str)
---     logTrace $ "Finished expecting string: " ++ str  -- Log when string has been successfully expected
-
--- -- | Same as `constIgnoreCaseP` but does not consume input or change the state
--- expectStringIgnoreCaseVerbose :: String -> Parser ()
--- expectStringIgnoreCaseVerbose str = do
---     logTrace $ "Starting to expect string (case-insensitive): " ++ str  -- Log the start of case-insensitive string expectation
---     expect str (void $ stringIgnoreCase str)
---     logTrace $ "Finished expecting string (case-insensitive): " ++ str  -- Log when case-insensitive string has been successfully expected
-
 charIgnoreCase :: Char -> Parser Char
 charIgnoreCase c = satisfy (\x -> toLower x == toLower c)
 
@@ -300,11 +275,6 @@ commentLine = wsP (string "//") *> many (satisfy (/= '\n')) *> newline
 
 skipCommentOrEmptyLines :: Parser ()
 skipCommentOrEmptyLines = void $ many (emptyLine <|> commentLine)
--- skipCommentOrEmptyLinesVerbose :: Parser ()
--- skipCommentOrEmptyLinesVerbose = do
---     logTrace "Skipping comments or empty lines"
---     void $ many (emptyLine <|> commentLine)
---     logTrace "Finished skipping comments or empty lines"
 
 -- | Parse any character
 anyChar :: Parser Char
@@ -358,7 +328,7 @@ effectRangeP = circleP
 effectNameP :: Parser String
 effectNameP =
     constIgnoreCaseP "effect_name:" ()
-    *> wsP (some (satisfy (/= '\n')))
+    *> stripP (some (satisfy (/= '\n')))
     <* newline
     <|> fatalErrorWithExpectStr "effectNameP()" "effect_name: <name>" 16
 
@@ -391,9 +361,10 @@ effectRequirementP = do
 -- 解析 effect_description
 effectDescriptionP :: Parser String
 effectDescriptionP = do
-    constIgnoreCaseP "effect_description:" ()
-    wsP (many (satisfy (/= '\n'))) <* newline
-    <|> fatalErrorWithExpectStr "effectDescriptionP()" "valid `effect_description:`" 23
+    constIgnoreCaseP "effect_description:" () 
+        <|> fatalErrorWithExpectStr "effectDescriptionP()" "`effect_description:`" 23
+    stripP (many (satisfy (/= '\n'))) <* newline 
+    <|> fatalErrorWithExpectStr "effectDescriptionP()" "`effect_description: <some descrp>`" 23
 
 -- 更新 Difficulty 的 effects 列表
 updateDifficulty :: (Difficulty -> Difficulty) -> Parser ()
@@ -408,34 +379,11 @@ effectP = do
     description <- updateFailToFatal "Error parsing effect description" effectDescriptionP
     let effect = Effect name range requirement description
     updateDifficulty (\d -> d { effectMap = Map.insert name effect (effectMap d) })
--- effectPVerbose :: Parser ()
--- effectPVerbose = do
---     logTrace "Starting effectP"
---     name <- updateFailToFatal "Error parsing effect name" effectNameP
---     logTrace $ "Parsed effect_name: " ++ name
---     range <- updateFailToFatal "Error parsing effect range" effectRangeLineP
---     logTrace $ "Parsed effect_range: " ++ show range
---     requirement <- updateFailToFatal "Error parsing effect requirement" effectRequirementP
---     logTrace $ "Parsed effect_requirement: " ++ show requirement
---     description <- updateFailToFatal "Error parsing effect description" effectDescriptionP
---     logTrace $ "Parsed effect_description: " ++ description
---     let effect = Effect name range requirement description
---     updateDifficulty (\d -> d { effectMap = Map.insert name effect (effectMap d) })
---     logTrace $ "Updated difficulty with new effect: " ++ show effect
-
 
 effectsP :: Parser ()
 effectsP = void $ some $ skipCommentOrEmptyLines
            *> expectString "effect_"  -- if a block starts with "effect", it is an effectP block
            *> effectP <* skipCommentOrEmptyLines
-
--- effectsP :: Parser ()
--- effectsP = do
---     trace "Attempting to parse effectsP" (return ())
---     void $ some $ skipCommentOrEmptyLines
---            *> (do trace "Checking for effect_ keyword" (return ())
---                   expectString "effect_" )
---            *> effectP <* skipCommentOrEmptyLines
 
 difficultyConstantP :: Parser ()
 difficultyConstantP = do
@@ -456,49 +404,19 @@ difficultyConstantP = do
 
     updateDifficulty (\d -> d { dimension = dimension, maxSteps = maxSteps })
 
--- difficultyConstantPVerbose :: Parser ()
--- difficultyConstantPVerbose = do
---     logTrace "Starting difficultyConstantP"
---     skipCommentOrEmptyLines
---     logTrace "Checked for comments or empty lines"
---     constIgnoreCaseP "difficulty_constant" () <* newline
---     logTrace "Matched 'difficulty_constant' keyword"
-
---     constP "dimension:" () <|> fatalErrorWithExpectStr "difficultyConstantP()" "`dimension:`" 13
---     dimension <- (wsP intP <* newline) <|> fatalError "Error parsing dimension"
---     logTrace $ "Parsed dimension: " ++ show dimension
---     when (dimension < 3) $ fatalError "dimension must be >= 3"
-
---     constP "max_steps:" () <|> fatalErrorWithExpectStr "difficultyConstantP()" "`max_steps:`" 14
---     maxSteps <- (wsP intP <* newline) <|> fatalError "Error parsing max_steps"
---     logTrace $ "Parsed max_steps: " ++ show maxSteps
---     when (maxSteps < 3) $ fatalError "max_steps must be >= 3"
-
---     updateDifficulty (\d -> d { dimension = dimension, maxSteps = maxSteps })
---     logTrace $ "Updated difficulty with dimension: " ++ show dimension ++ " and max_steps: " ++ show maxSteps
-
 -- 解析 shape_name
 shapeNameP :: Parser String
 shapeNameP = do
     constIgnoreCaseP "shape_name:" () <|> fatalError "expected `shape_name:`, but got something else."
-    name <- wsP (some (satisfy (/= '\n'))) <|> fatalError "shape_name cannot be empty"
+    name <- stripP (some (satisfy (/= '\n'))) <|> fatalError "shape_name cannot be empty"
     newline <|> fatalError "missing newline after shape_name"
     return name
--- shapeNamePVerbose :: Parser String
--- shapeNamePVerbose = do
---     logTrace "Parsing shape_name"
---     constIgnoreCaseP "shape_name:" ()
---     name <- wsP (some (satisfy (/= '\n')))
---     logTrace $ "Parsed shape_name value: " ++ name
---     newline
---     logTrace "Consumed newline after shape_name"
---     return name
 
 -- 解析 shape_icon
 shapeIconP :: Parser String
 shapeIconP = do
     constIgnoreCaseP "shape_icon:" () <|> fatalErrorWithExpectStr "shapeIconP()" "`shape_icon: <icon>`" 13
-    icon <- wsP (some (satisfy (/= '\n'))) <|> fatalError "shape_icon cannot be empty"
+    icon <- stripP (some (satisfy (/= '\n'))) <|> fatalError "shape_icon cannot be empty"
     newline <|> fatalError "Missing newline after shape_icon"
     return icon
 
@@ -506,7 +424,7 @@ shapeIconP = do
 effectNameRefP :: Parser String
 effectNameRefP = do
     constIgnoreCaseP "effect_name:" () <|> fatalErrorWithExpectStr "effectNameRefP()" "`effect_name: <name>`" 14
-    effectName <- wsP (some (satisfy (/= '\n'))) <|> fatalError "effect name cannot be empty"
+    effectName <- stripP (some (satisfy (/= '\n'))) <|> fatalError "effect name cannot be empty"
     newline <|> fatalError "Missing newline after effect_name"
     return effectName
 
@@ -531,63 +449,7 @@ candiesP :: Parser ()
 candiesP = void $ some $ skipCommentOrEmptyLines
            *> expectString "shape_"  -- if a block starts with "shape", it is a candyP block
            *> candyP <* skipCommentOrEmptyLines
--- candiesPVerbose :: Parser ()
--- candiesPVerbose = do
---     logTrace "Starting candiesP"
---     void $ some $ do
---         skipCommentOrEmptyLines
---         logTrace "Checked for comments or empty lines"
---         expectString "shape_name"
---         logTrace "Matched 'shape_name', entering candyP"
---         candyP
---         logTrace "Finished parsing a candy"
---     logTrace "Finished candiesP"
 
-
--- candyPVerbose :: Parser ()
--- candyPVerbose = do
---     logTrace "Entering candyP"
---     name <- shapeNameP
---     logTrace $ "Parsed shape_name: " ++ name
---     icon <- shapeIconP
---     logTrace $ "Parsed shape_icon: " ++ icon
---     effectName <- effectNameRefP
---     logTrace $ "Parsed effect_name: " ++ effectName
---     effect <- effectNameToEffect effectName
---     logTrace $ "Resolved effect: " ++ show effect
---     let candyDef = CandyDefinition name icon effectName
---     updateDifficulty (\d -> d { candyMap = Map.insert name (Candy candyDef effect) (candyMap d) })
---     logTrace "Updated difficulty with new candy"
-
-
--- logState :: Parser ()
--- logState = P $ \state -> 
---     let lineNo = lineNum state
---         diff = difficulty state
---     in trace ("On line " ++ show lineNo ++ ": " ++ show diff) (Right ((), state))
--- logRemainingInput :: Parser ()
--- logRemainingInput = P $ \state ->
---     trace ("Remaining input: `" ++ take 50 (input state) ++ "`") (Right ((), state))
--- logTrace :: String -> Parser ()
--- logTrace msg = P $ \state ->
---     trace ("[LOG] Line " ++ show (lineNum state) ++ ": " ++ msg ++ " | Remaining input: `" ++ take 50 (input state) ++ "`") 
---     (Right ((), state))
--- logTrace :: String -> Parser ()
--- logTrace msg = P $ \state -> 
---     let logMsg = "[LOG] Line " ++ show (lineNum state) ++ ": " ++ msg ++ 
---                  " | Remaining input: `" ++ take 50 (input state) ++ "`"
---     in traceToFile logMsg (Right ((), state))
-
--- logFile :: FilePath
--- logFile = "parser.log"  -- 日志文件路径
-
--- 自定义 traceToFile
--- traceToFile :: String -> a -> a
--- traceToFile msg expr = unsafePerformIO $ do
---     withFile logFile AppendMode $ \handle -> do
---         hPutStrLn handle msg -- 将日志写入文件
---         hFlush handle        -- 确保日志立即刷新到磁盘
---     return expr
 parseLoop :: Parser ()
 parseLoop = do
     skipCommentOrEmptyLines
@@ -597,25 +459,7 @@ parseLoop = do
             <|> candiesP
             <|> difficultyConstantP
             <|> failErrorWithExpectStr "parseLoop():" "one of [`effect_`, `shape_`, `difficulty_constant`]" 10
-        parseLoop  
--- parseLoopVerbose :: Parser ()
--- parseLoopVerbose = do
---     logTrace "Starting parseLoop"
---     skipCommentOrEmptyLines
---     logTrace "Skipped comments or empty lines"
---     logRemainingInput
---     notEOF <- (eof *> pure False) <|> pure True
---     when notEOF $ do
---         (logTrace "Attempting effectsP" >> effectsP)
---             <|> (logTrace "Attempting candiesP" >> candiesP)
---             <|> difficultyConstantP
---             <|> failErrorWithExpectStr "parseLoop():" "one of [`effect_`, `shape_`, `difficulty_constant`]" 10
---         logTrace "Successfully parsed one section"
---         logState
---         logRemainingInput
---         parseLoop
---     logTrace "Exiting parseLoop"
-
+        parseLoop
 
 -- | Parse the entire input file into a Difficulty object
 fileP :: String -> Either ParseError Difficulty
@@ -631,27 +475,4 @@ parseFile filename = do
         Left ex -> return $ Left (FatalError ("error reading `" ++ filename ++ "`") 0)
         Right content -> return (fileP content)
 
--- 断言解析成功
-assertIsSuccess :: (Show a, Eq b, Show b) => Either a b -> b -> String -> IO ()
-assertIsSuccess result expected errMsg =
-  case result of
-    Right x | x == expected -> return () -- 解析成功且结果符合预期，测试通过
-            | otherwise -> error $ errMsg ++ ", but got: " ++ show x
-    Left e -> error $ errMsg ++ ", but got error: " ++ show e
-
--- 断言解析失败（FatalError）
-assertIsFatalError :: (Show b) => Either ParseError b -> String -> IO ()
-assertIsFatalError result errMsg =
-  case result of
-    Left (FatalError _ _) -> return () -- 解析失败，测试通过
-    Left (FailError e line) -> error $ errMsg ++ ", but got fail error at line " ++ show line ++ ": " ++ e
-    Right x -> error $ errMsg ++ ", but got: " ++ show x
-
--- 断言解析失败（FailError）
-assertIsFailError :: (Show b) => Either ParseError b -> String -> IO ()
-assertIsFailError result errMsg =
-  case result of
-    Left (FailError _ _) -> return () -- 解析失败，测试通过
-    Left (FatalError e line) -> error $ errMsg ++ ", but got fatal error at line " ++ show line ++ ": " ++ e
-    Right x -> error $ errMsg ++ ", but got: " ++ show x
 

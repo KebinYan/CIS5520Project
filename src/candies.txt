@@ -59,12 +59,12 @@ effect_range: Arbitrary [(0, :)]
 effect_requirement: =4
 effect_description: When matched, clears the entire row.
 
-effect_name: StripedCross
+effect_name:   StripedCross  
 effect_range: Arbitrary [(0, :), (:, 0)]
 effect_requirement: >5
 effect_description: When matched, clears the entire row and column.
 
-effect_name: invalid effect 
+effect_name: some_effect 
 effect_range: Arbitrary [(0, :), (:, 0)]
 effect_requirement: =5
 effect_description: When matched, clears the entire row and column.
@@ -72,14 +72,14 @@ effect_description: When matched, clears the entire row and column.
 effect_name: Bomb
 effect_range: Rectangle 3 3
 effect_requirement: =5
-effect_description: When matched, clears all candies in a 3x3 area.
+effect_description: When matched, clears all candies in a 3x3 area. 
 
-effect_name: CircleBomb
+effect_name: CircleBomb 
 effect_range: Circle 2
 effect_requirement: =5
 effect_description: When matched, clears all candies in the circular area with radius 2.
 
-effect_name: DiamondBomb
+effect_name:  DiamondBomb 
 effect_range: Diamond 2
 effect_requirement: =5
 effect_description: When matched, clears all candies in the diamond-shaped area with radius 2.
@@ -119,13 +119,13 @@ shape_name: Circle
 shape_icon: ●
 effect_name: CircleBomb
 
-shape_name: Diamond
+shape_name: Diamond 
 shape_icon: ♦
 effect_name: DiamondBomb
 
-shape_name: Cross
+shape_name: Cross  
 shape_icon: ✚
-effect_name: StripedCross
+effect_name: StripedCross 
 
 // shape_name: invalid
 // shape_icon: xxx
