@@ -37,6 +37,11 @@ operatorMapping =
   , ("<=", Le)
   , ("<", Lt)
   , ("=", Eq)
+  , ("Eq", Eq)
+  , ("Gt", Gt)
+  , ("Ge", Ge)
+  , ("Lt", Lt)
+  , ("Le", Le)
   ]
 allowedEffectReqOperators :: [Operator]
 allowedEffectReqOperators = [Eq, Gt, Ge]

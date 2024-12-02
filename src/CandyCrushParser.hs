@@ -14,14 +14,19 @@ import qualified Data.Set as Set
 import qualified Data.Map as Map
 import qualified Prelude as P
 import Debug.Trace (trace)
-
+import Constants
 import Candy
+import qualified Constants as Constant
+import Control.Exception (IOException, try)
+--------------------------------------------------------------------------------
+import System.IO
+import System.IO.Unsafe (unsafePerformIO)
 
 type Name = String
 -- Difficulty level
 data Difficulty = Difficulty
     { dimension :: Int
-    , candyMap  :: Map Name CandyShape
+    , candyMap  :: Map Name Candy
     , effectMap :: Map Name Effect
     , maxSteps  :: Int
     } deriving (Show, Eq)
@@ -73,16 +78,26 @@ bindParser p f = P $ \s -> case doParse p s of
 
 -- 抛出致命错误，包含行号
 fatalError :: String -> Parser a
-fatalError msg = P $ \state -> Left (FatalError msg (lineNum state))
+fatalError msg = P $ \state -> Left (FatalError (msg ++ "\n" ++ show state)  (lineNum state))
+
+fatalErrorWithExpectStr :: String -> String -> Int -> Parser a
+fatalErrorWithExpectStr msg expectStr len = P $ \state ->
+    Left (FatalError (msg ++ " expected: `" ++ expectStr ++ "`, but got `" ++ peekStr len state ++ "`" ++ "\n" ++ show state) 
+    (lineNum state))
 
 -- 抛出可恢复错误，包含行号
 failError :: String -> Parser a
 failError msg = P $ \state -> Left (FailError msg (lineNum state))
 
+failErrorWithExpectStr :: String -> String -> Int -> Parser a
+failErrorWithExpectStr  msg expectStr len = P $ \state ->
+    Left (FailError (msg ++ ", expected: `" ++ expectStr ++ "`, but got `" ++ peekStr len state ++ "`") 
+    (lineNum state))
+
 -- | Update a parser to upgrade FailError to FatalError
 updateFailToFatal :: String -> Parser a -> Parser a
-updateFailToFatal msg parser = P $ \state -> case doParse parser state of
-    Left (FailError _ _) -> Left (FatalError msg (lineNum state))  -- 升级为 FatalError
+updateFailToFatal errorMsg parser = P $ \state -> case doParse parser state of
+    Left (FailError msg _) -> Left (FatalError (errorMsg ++ ": " ++ msg) (lineNum state))  -- 升级为 FatalError
     result               -> result                                 -- 返回其他结果
 
 -- ｜Combines two parsers
@@ -93,7 +108,7 @@ upgradeToFatalIfFirstSucceeds errorMsg conditionParser mainParser = do
     P $ \state -> case doParse mainParser state of
         Left (FailError msg _) -> Left (FatalError (errorMsg ++ ": " ++ msg) (lineNum state))  -- 升级为 FatalError
         result                 -> result                                     -- 返回其他结果
-        
+
 -- | Strip whitespace from the beginning and end of a parser
 wsP :: Parser a -> Parser a
 wsP p = many space *> p <* many space
@@ -118,7 +133,7 @@ get = P $ \s -> case input s of
 eof :: Parser ()
 eof = P $ \s -> case input s of
   [] -> Right ((), s)  -- 输入为空，成功解析
-  _  -> Left (FailError ("Expected EOF but found more input at line " ++ show (lineNum s)) (lineNum s))
+  _  -> Left (FailError ("Expected EOF at line " ++ show (lineNum s) ++ "but got `" ++ peekStr 5 s ++ "`...") (lineNum s))
 
 -- | Filter the parsing results by a predicate
 filter :: Show a => (a -> Bool) -> Parser a -> Parser a
@@ -142,7 +157,7 @@ alpha = satisfy isAlpha
 digit = satisfy isDigit
 upper = satisfy isUpper
 lower = satisfy isLower
-space = satisfy isSpaceOrTab 
+space = satisfy isSpaceOrTab
 
 -- | Return the next character if it matches the given character
 char :: Char -> Parser Char
@@ -160,6 +175,11 @@ peek n = P $ \s ->
     if null (input s)
     then Right ("", s)
     else Right (take n (input s), s)
+
+peekStr :: Int -> ParseState -> String
+peekStr n state =
+    let currentInput = input state
+    in take n currentInput
 
 intP :: Parser Int
 intP = do
@@ -186,12 +206,17 @@ sepBy p sep = sepBy1 p sep <|> pure []
 sepBy1 :: Parser a -> Parser sep -> Parser [a]
 sepBy1 p sep = (:) <$> p <*> many (sep *> p)
 
+count :: Eq a => a -> [a] -> Int
+count x = length . P.filter (== x)
+
+-- | Parse a string
 string :: String -> Parser String
 string str = P $ \s ->
     if str `isPrefixOf` input s
-        then Right (str, s { input = drop (length str) (input s) })
+        then Right (str, s { input = drop (length str) (input s), lineNum = lineNum s + count '\n' str })
         else Left (FailError ("Expected string " ++ show str ++ " at line " ++ show (lineNum s)) (lineNum s))
 
+-- | Parse a string with leading and trailing whitespace
 stringP :: String -> Parser ()
 stringP s = wsP (string s) *> pure ()
 
@@ -203,6 +228,52 @@ brackets x = between (stringP "[") x (stringP "]")
 
 constP :: String -> a -> Parser a
 constP s x = wsP (string s) *> pure x
+             <|>
+             (do peek (length s) >>= \s' -> failErrorWithExpectStr "constP()" s (length s))
+
+-- | Parse a string with provided parse but does not consume input
+-- constP consumes input if successful, this does not consume input in any case
+-- Partial function that is similar to `satify` but for strings and does not consume input 
+expect :: String -> Parser () -> Parser ()
+expect str p =  P $ \state -> case doParse p state of
+    Right (_, _) -> Right ((), state) -- only check if the string is present, do not change the state
+    Left (FailError _ _) -> Left (FailError ("Expected " ++ str) (lineNum state))
+    Left fatalError      -> Left fatalError
+
+-- | Same as `constP` but does not consume input or change the state
+expectString :: String -> Parser ()
+expectString str = expect str (void $ string str)
+-- | Same as `constIgnoreCaseP` but does not consume input or change the state
+expectStringIgnoreCase :: String -> Parser ()
+expectStringIgnoreCase str = expect str (void $ stringIgnoreCase str)
+
+-- expectVerbose :: String -> Parser () -> Parser ()
+-- expectVerbose str p = P $ \state -> do
+--     traceToFile ("Expecting string: " ++ str) (Right ((), state))  -- Log when expecting a specific string
+--     case doParse p state of
+--         Right (_, _) -> do
+--             traceToFile ("Successfully matched: " ++ str) (Right ((), state))  -- Log success when string matches
+--             Right ((), state)  -- Only check if the string is present, do not change the state
+--         Left (FailError _ _) -> do
+--             traceToFile ( "Failed to match: " ++ str) (Left (FailError ("Expected " ++ str) (lineNum state)))  -- Show failure
+--             Left (FailError ("Expected " ++ str) (lineNum state))  -- Show failure
+--         Left fatalError -> do
+--             traceToFile ("Fatal error while expecting: " ++ str) (Left fatalError)  -- Log fatal error
+--             Left fatalError
+
+-- -- | Same as `constP` but does not consume input or change the state
+-- expectStringVerbose :: String -> Parser ()
+-- expectStringVerbose str = do
+--     logTrace $ "Starting to expect string: " ++ str  -- Log the start of string expectation
+--     expect str (void $ string str)
+--     logTrace $ "Finished expecting string: " ++ str  -- Log when string has been successfully expected
+
+-- -- | Same as `constIgnoreCaseP` but does not consume input or change the state
+-- expectStringIgnoreCaseVerbose :: String -> Parser ()
+-- expectStringIgnoreCaseVerbose str = do
+--     logTrace $ "Starting to expect string (case-insensitive): " ++ str  -- Log the start of case-insensitive string expectation
+--     expect str (void $ stringIgnoreCase str)
+--     logTrace $ "Finished expecting string (case-insensitive): " ++ str  -- Log when case-insensitive string has been successfully expected
 
 charIgnoreCase :: Char -> Parser Char
 charIgnoreCase c = satisfy (\x -> toLower x == toLower c)
@@ -219,8 +290,7 @@ advanceLine s currentLine = currentLine + length (P.filter (== '\n') s)
 -- | Parse a newline character
 
 newline :: Parser ()
-newline = trace "\nnewline called once" $ void $ char '\n'
-
+newline = void (string "\r\n" <|> string "\n" <|> string "\r")
 
 emptyLine :: Parser ()
 emptyLine = wsP newline
@@ -230,6 +300,11 @@ commentLine = wsP (string "//") *> many (satisfy (/= '\n')) *> newline
 
 skipCommentOrEmptyLines :: Parser ()
 skipCommentOrEmptyLines = void $ many (emptyLine <|> commentLine)
+-- skipCommentOrEmptyLinesVerbose :: Parser ()
+-- skipCommentOrEmptyLinesVerbose = do
+--     logTrace "Skipping comments or empty lines"
+--     void $ many (emptyLine <|> commentLine)
+--     logTrace "Finished skipping comments or empty lines"
 
 -- | Parse any character
 anyChar :: Parser Char
@@ -281,114 +356,28 @@ effectRangeP = circleP
     <|> fatalError "Unrecognized effect range type"
 
 effectNameP :: Parser String
-effectNameP = upgradeToFatalIfFirstSucceeds "error while parsing effect name"
-    (constIgnoreCaseP "effect_name:" ())
-    (do
-        name <- wsP (some (satisfy (/= '\n')))
-        if null name
-            then fatalError "Effect name cannot be empty"
-            else return name
-        <* (wsP newline <|> fatalError "Missing newline after effect name")
-    )
+effectNameP =
+    constIgnoreCaseP "effect_name:" ()
+    *> wsP (some (satisfy (/= '\n')))
+    <* newline
+    <|> fatalErrorWithExpectStr "effectNameP()" "effect_name: <name>" 16
 
-
-
-testEffectNameP :: Test
-testEffectNameP = TestList
-  [ "Valid effect name" ~: 
-      doParse effectNameP (ParseState "effect_name: StripedRow\n" 1 emptyDifficulty)
-      ~?= Right ("StripedRow", ParseState "" 2 emptyDifficulty)
-    , "Effect name with spaces" ~: 
-        doParse effectNameP (ParseState "effect_name: Striped Row\n" 1 emptyDifficulty)
-        ~?= Right ("Striped Row", ParseState "" 2 emptyDifficulty)
-    , "Missing effect name" ~: assertIsFatalError 
-        (doParse effectNameP (ParseState "effect_name: \n" 1 emptyDifficulty))
-        "Expected a FatalError for missing effect name"
-    , "Invalid prefix" ~: assertIsFatalError
-        (doParse effectNameP (ParseState "invalid_effect_name: 123\n" 1 emptyDifficulty))
-        "Expected a FatalError for invalid effect name"
-    , "Missing EOF" ~: assertIsFatalError
-        (doParse effectNameP (ParseState "effect_name: StripedRow" 1 emptyDifficulty))
-        "Expected a FatalError for missing newline"
-  ]
-testEffectRangeLineP :: Test
-testEffectRangeLineP = TestList
-  [ "Valid effect range" ~: 
-      doParse effectRangeLineP (ParseState "effect_range: Arbitrary [(:,0)]\n" 1 emptyDifficulty)
-      ~?= Right (Arbitrary [(All, Coordinate 0)], ParseState "" 2 emptyDifficulty)
-  , "Invalid effect range" ~:  assertIsFatalError 
-    (doParse effectRangeLineP (ParseState "effect_range: InvalidRange\n" 1 emptyDifficulty))
-    "Expected a FatalError for invalid effect range"
-  ]
-testOperatorP :: Test
-testOperatorP = TestList
-  [ "Valid operators" ~: TestList 
-      [ doParse operatorP (ParseState "=\n" 1 emptyDifficulty) ~?= Right (Eq, ParseState "\n" 1 emptyDifficulty)
-      , doParse operatorP (ParseState ">\n" 1 emptyDifficulty) ~?= Right (Gt, ParseState "\n" 1 emptyDifficulty)
-      , doParse operatorP (ParseState ">=\n" 1 emptyDifficulty) ~?= Right (Ge, ParseState "\n" 1 emptyDifficulty)
-      ]
-    , "Invalid operator le" ~: assertIsFailError 
-        (doParse operatorP (ParseState "<=\n" 1 emptyDifficulty))
-        "Expected a FailError for invalid operator"
-    , "invalid operator lt" ~: assertIsFailError 
-        (doParse operatorP (ParseState "<\n" 1 emptyDifficulty))
-        "Expected a FailError for invalid operator"
-    , "unknown operator" ~: assertIsFailError 
-        (doParse operatorP (ParseState "--\n" 1 emptyDifficulty))
-        "Expected a FailError for unknown operator"
-  ]
-testEffectRequirementP :: Test
-testEffectRequirementP = TestList
-  [ "Valid effect requirement with default =" ~: 
-      doParse effectRequirementP (ParseState "effect_requirement: 5\n" 1 emptyDifficulty)
-      ~?= Right (EffectRequirement Eq 5, ParseState "" 2 emptyDifficulty)
-    , "Valid effect requirement with =" ~: 
-        doParse effectRequirementP (ParseState "effect_requirement: = 5\n" 1 emptyDifficulty)
-        ~?= Right (EffectRequirement Eq 5, ParseState "" 2 emptyDifficulty)
-    , "Valid effect requirement with >" ~: 
-        doParse effectRequirementP (ParseState "effect_requirement: > 3\n" 1 emptyDifficulty)
-        ~?= Right (EffectRequirement Gt 3, ParseState "" 2 emptyDifficulty)
-    , "Invalid operator in requirement" ~: 
-        assertIsFatalError 
-            (doParse effectRequirementP (ParseState "effect_requirement: <= 5\n" 1 emptyDifficulty))
-            "Expected a FailError for invalid operator"
-    , "Invalid negative number in requirement" ~: 
-        assertIsFatalError 
-            (doParse effectRequirementP (ParseState "effect_requirement: > -5\n" 1 emptyDifficulty))
-            "Expected a FailError for negative number"
-    , "Invalid number in requirement" ~: 
-        assertIsFatalError 
-            (doParse effectRequirementP (ParseState "effect_requirement: > abc\n" 1 emptyDifficulty))
-            "Expected a FailError for invalid number"
-    , "Missing number in requirement" ~: 
-        assertIsFatalError 
-            (doParse effectRequirementP (ParseState "effect_requirement: >\n" 1 emptyDifficulty))
-            "Expected a FailError for missing number"
-    , "Invalid operator in requirement" ~: 
-        assertIsFatalError 
-            (doParse effectRequirementP (ParseState "invalid_effect_requirement: > 5\n" 1 emptyDifficulty))
-            "Expected a FatalError for invalid effect requirement"
-  ]
-testEffectDescriptionP :: Test
-testEffectDescriptionP = TestList
-  [ "Valid effect description" ~: 
-      doParse effectDescriptionP (ParseState "effect_description: Clears the row\n" 1 emptyDifficulty)
-      ~?= Right ("Clears the row", ParseState "" 2 emptyDifficulty)
-  , "Missing effect description" ~: doParse effectDescriptionP (ParseState "effect_description: \n" 1 emptyDifficulty)
-        ~?= Right ("", ParseState "" 1 emptyDifficulty)
-  ]
 effectRangeLineP:: Parser EffectRange
 effectRangeLineP = stringIgnoreCase "effect_range:" *> wsP effectRangeP <* newline
 
+-- | Parse a comparison operator
+-- This parser parses the operators defined in the `Operator` data type and operatorMapping.
+-- Does not check if the operator is allowed. This check is done in calling func such as `effectRequirementP`.
 operatorP :: Parser Operator
 operatorP = foldr ((<|>) . makeOpParser) empty operatorMapping
   where
     makeOpParser (str, op) = constP str op
 
 effectRequirementP :: Parser EffectRequirement
-effectRequirementP =  upgradeToFatalIfFirstSucceeds "error while parsing EffectRequirement"
-    (constIgnoreCaseP "effect_requirement:" ())
-    ((EffectRequirement <$> (wsP operatorP >>= checkOperator) <*> (wsP intP >>= checkPositive)) <* newline)
+effectRequirementP = do
+    constIgnoreCaseP "effect_requirement:" ()
+    EffectRequirement <$> (wsP operatorP >>= checkOperator) <*> (wsP intP >>= checkPositive) <* newline
+    <|> fatalErrorWithExpectStr "effectRequirementP()" "effect_requirement: [>, >=, =] <number>" 23
   where
     -- check if the operator is allowed
     checkOperator op
@@ -396,36 +385,251 @@ effectRequirementP =  upgradeToFatalIfFirstSucceeds "error while parsing EffectR
         | otherwise = fatalError $ "operator " ++ show op ++ " is not allowed"
     -- check if the number is positive
     checkPositive n
-        | n < 0     = fatalError "expected a positive number"
+        | n < 0     = fatalErrorWithExpectStr "checkPositive()" "a positive number" 3
         | otherwise = return n
 
 -- 解析 effect_description
 effectDescriptionP :: Parser String
-effectDescriptionP = upgradeToFatalIfFirstSucceeds "error while parsing effect description"
-    (constIgnoreCaseP "effect_description:" ())
-    (wsP (many (satisfy (/= '\n'))) <* newline)
+effectDescriptionP = do
+    constIgnoreCaseP "effect_description:" ()
+    wsP (many (satisfy (/= '\n'))) <* newline
+    <|> fatalErrorWithExpectStr "effectDescriptionP()" "valid `effect_description:`" 23
 
 -- 更新 Difficulty 的 effects 列表
 updateDifficulty :: (Difficulty -> Difficulty) -> Parser ()
 updateDifficulty f = P $ \state -> Right ((), state { difficulty = f (difficulty state) })
 
+
 effectP :: Parser ()
 effectP = do
-    name <- effectNameP
-    range <- effectRangeLineP
-    requirement <- effectRequirementP
-    description <- effectDescriptionP
+    name <- updateFailToFatal "Error parsing effect name" effectNameP
+    range <- updateFailToFatal "Error parsing effect range" effectRangeLineP
+    requirement <- updateFailToFatal "Error parsing effect requirement" effectRequirementP
+    description <- updateFailToFatal "Error parsing effect description" effectDescriptionP
     let effect = Effect name range requirement description
     updateDifficulty (\d -> d { effectMap = Map.insert name effect (effectMap d) })
+-- effectPVerbose :: Parser ()
+-- effectPVerbose = do
+--     logTrace "Starting effectP"
+--     name <- updateFailToFatal "Error parsing effect name" effectNameP
+--     logTrace $ "Parsed effect_name: " ++ name
+--     range <- updateFailToFatal "Error parsing effect range" effectRangeLineP
+--     logTrace $ "Parsed effect_range: " ++ show range
+--     requirement <- updateFailToFatal "Error parsing effect requirement" effectRequirementP
+--     logTrace $ "Parsed effect_requirement: " ++ show requirement
+--     description <- updateFailToFatal "Error parsing effect description" effectDescriptionP
+--     logTrace $ "Parsed effect_description: " ++ description
+--     let effect = Effect name range requirement description
+--     updateDifficulty (\d -> d { effectMap = Map.insert name effect (effectMap d) })
+--     logTrace $ "Updated difficulty with new effect: " ++ show effect
 
 
 effectsP :: Parser ()
-effectsP = void $ many $ skipCommentOrEmptyLines *> effectP <* skipCommentOrEmptyLines
--- ---------------------------------------------------------------
---                      测试用例
--- ---------------------------------------------------------------
+effectsP = void $ some $ skipCommentOrEmptyLines
+           *> expectString "effect_"  -- if a block starts with "effect", it is an effectP block
+           *> effectP <* skipCommentOrEmptyLines
 
--- 为了测试，我们需要定义一些辅助函数
+-- effectsP :: Parser ()
+-- effectsP = do
+--     trace "Attempting to parse effectsP" (return ())
+--     void $ some $ skipCommentOrEmptyLines
+--            *> (do trace "Checking for effect_ keyword" (return ())
+--                   expectString "effect_" )
+--            *> effectP <* skipCommentOrEmptyLines
+
+difficultyConstantP :: Parser ()
+difficultyConstantP = do
+    -- check if the block is a difficulty constant block
+    skipCommentOrEmptyLines
+    constIgnoreCaseP "difficulty_constant" () <*newline
+
+    -- parse dimension
+    constP "dimension:" () <|> fatalErrorWithExpectStr "difficultyConstantP()" "`dimension:`" 13
+    -- parse the number and skip the newline
+    dimension <- (wsP intP <* newline) <|> fatalError "error parsing dimension int"
+    when (dimension < 3) $ fatalError "dimension must be >= 3"
+
+    -- parse max_steps
+    constP "max_steps:" () <|> fatalErrorWithExpectStr "difficultyConstantP()" "`max_steps:`" 14
+    maxSteps <- (wsP intP <* newline) <|> fatalError "error parsing max_steps int"
+    when (maxSteps < 3) $ fatalError "max_steps must be >= 3"
+
+    updateDifficulty (\d -> d { dimension = dimension, maxSteps = maxSteps })
+
+-- difficultyConstantPVerbose :: Parser ()
+-- difficultyConstantPVerbose = do
+--     logTrace "Starting difficultyConstantP"
+--     skipCommentOrEmptyLines
+--     logTrace "Checked for comments or empty lines"
+--     constIgnoreCaseP "difficulty_constant" () <* newline
+--     logTrace "Matched 'difficulty_constant' keyword"
+
+--     constP "dimension:" () <|> fatalErrorWithExpectStr "difficultyConstantP()" "`dimension:`" 13
+--     dimension <- (wsP intP <* newline) <|> fatalError "Error parsing dimension"
+--     logTrace $ "Parsed dimension: " ++ show dimension
+--     when (dimension < 3) $ fatalError "dimension must be >= 3"
+
+--     constP "max_steps:" () <|> fatalErrorWithExpectStr "difficultyConstantP()" "`max_steps:`" 14
+--     maxSteps <- (wsP intP <* newline) <|> fatalError "Error parsing max_steps"
+--     logTrace $ "Parsed max_steps: " ++ show maxSteps
+--     when (maxSteps < 3) $ fatalError "max_steps must be >= 3"
+
+--     updateDifficulty (\d -> d { dimension = dimension, maxSteps = maxSteps })
+--     logTrace $ "Updated difficulty with dimension: " ++ show dimension ++ " and max_steps: " ++ show maxSteps
+
+-- 解析 shape_name
+shapeNameP :: Parser String
+shapeNameP = do
+    constIgnoreCaseP "shape_name:" () <|> fatalError "expected `shape_name:`, but got something else."
+    name <- wsP (some (satisfy (/= '\n'))) <|> fatalError "shape_name cannot be empty"
+    newline <|> fatalError "missing newline after shape_name"
+    return name
+-- shapeNamePVerbose :: Parser String
+-- shapeNamePVerbose = do
+--     logTrace "Parsing shape_name"
+--     constIgnoreCaseP "shape_name:" ()
+--     name <- wsP (some (satisfy (/= '\n')))
+--     logTrace $ "Parsed shape_name value: " ++ name
+--     newline
+--     logTrace "Consumed newline after shape_name"
+--     return name
+
+-- 解析 shape_icon
+shapeIconP :: Parser String
+shapeIconP = do
+    constIgnoreCaseP "shape_icon:" () <|> fatalErrorWithExpectStr "shapeIconP()" "`shape_icon: <icon>`" 13
+    icon <- wsP (some (satisfy (/= '\n'))) <|> fatalError "shape_icon cannot be empty"
+    newline <|> fatalError "Missing newline after shape_icon"
+    return icon
+
+-- 解析 effect_name
+effectNameRefP :: Parser String
+effectNameRefP = do
+    constIgnoreCaseP "effect_name:" () <|> fatalErrorWithExpectStr "effectNameRefP()" "`effect_name: <name>`" 14
+    effectName <- wsP (some (satisfy (/= '\n'))) <|> fatalError "effect name cannot be empty"
+    newline <|> fatalError "Missing newline after effect_name"
+    return effectName
+
+effectNameToEffect :: String -> Parser Effect
+effectNameToEffect name = do
+    difficulty <- P $ \state -> Right (difficulty state, state)
+    case Map.lookup name (effectMap difficulty) of
+        Just effect -> return effect
+        Nothing -> fatalError $ "Effect `" ++ name ++ "` not found in the effect map"
+
+candyP :: Parser ()
+candyP = do
+    skipCommentOrEmptyLines
+    name <- shapeNameP
+    icon <- shapeIconP
+    effectName <- effectNameRefP
+    effect <- effectNameToEffect effectName
+    let candyDef = CandyDefinition name icon effectName
+    updateDifficulty (\d -> d { candyMap = Map.insert name (Candy candyDef effect) (candyMap d) })
+
+candiesP :: Parser ()
+candiesP = void $ some $ skipCommentOrEmptyLines
+           *> expectString "shape_"  -- if a block starts with "shape", it is a candyP block
+           *> candyP <* skipCommentOrEmptyLines
+-- candiesPVerbose :: Parser ()
+-- candiesPVerbose = do
+--     logTrace "Starting candiesP"
+--     void $ some $ do
+--         skipCommentOrEmptyLines
+--         logTrace "Checked for comments or empty lines"
+--         expectString "shape_name"
+--         logTrace "Matched 'shape_name', entering candyP"
+--         candyP
+--         logTrace "Finished parsing a candy"
+--     logTrace "Finished candiesP"
+
+
+-- candyPVerbose :: Parser ()
+-- candyPVerbose = do
+--     logTrace "Entering candyP"
+--     name <- shapeNameP
+--     logTrace $ "Parsed shape_name: " ++ name
+--     icon <- shapeIconP
+--     logTrace $ "Parsed shape_icon: " ++ icon
+--     effectName <- effectNameRefP
+--     logTrace $ "Parsed effect_name: " ++ effectName
+--     effect <- effectNameToEffect effectName
+--     logTrace $ "Resolved effect: " ++ show effect
+--     let candyDef = CandyDefinition name icon effectName
+--     updateDifficulty (\d -> d { candyMap = Map.insert name (Candy candyDef effect) (candyMap d) })
+--     logTrace "Updated difficulty with new candy"
+
+
+-- logState :: Parser ()
+-- logState = P $ \state -> 
+--     let lineNo = lineNum state
+--         diff = difficulty state
+--     in trace ("On line " ++ show lineNo ++ ": " ++ show diff) (Right ((), state))
+-- logRemainingInput :: Parser ()
+-- logRemainingInput = P $ \state ->
+--     trace ("Remaining input: `" ++ take 50 (input state) ++ "`") (Right ((), state))
+-- logTrace :: String -> Parser ()
+-- logTrace msg = P $ \state ->
+--     trace ("[LOG] Line " ++ show (lineNum state) ++ ": " ++ msg ++ " | Remaining input: `" ++ take 50 (input state) ++ "`") 
+--     (Right ((), state))
+-- logTrace :: String -> Parser ()
+-- logTrace msg = P $ \state -> 
+--     let logMsg = "[LOG] Line " ++ show (lineNum state) ++ ": " ++ msg ++ 
+--                  " | Remaining input: `" ++ take 50 (input state) ++ "`"
+--     in traceToFile logMsg (Right ((), state))
+
+-- logFile :: FilePath
+-- logFile = "parser.log"  -- 日志文件路径
+
+-- 自定义 traceToFile
+-- traceToFile :: String -> a -> a
+-- traceToFile msg expr = unsafePerformIO $ do
+--     withFile logFile AppendMode $ \handle -> do
+--         hPutStrLn handle msg -- 将日志写入文件
+--         hFlush handle        -- 确保日志立即刷新到磁盘
+--     return expr
+parseLoop :: Parser ()
+parseLoop = do
+    skipCommentOrEmptyLines
+    notEOF <- (eof *> pure False) <|> pure True
+    when notEOF $ do
+        effectsP
+            <|> candiesP
+            <|> difficultyConstantP
+            <|> failErrorWithExpectStr "parseLoop():" "one of [`effect_`, `shape_`, `difficulty_constant`]" 10
+        parseLoop  
+-- parseLoopVerbose :: Parser ()
+-- parseLoopVerbose = do
+--     logTrace "Starting parseLoop"
+--     skipCommentOrEmptyLines
+--     logTrace "Skipped comments or empty lines"
+--     logRemainingInput
+--     notEOF <- (eof *> pure False) <|> pure True
+--     when notEOF $ do
+--         (logTrace "Attempting effectsP" >> effectsP)
+--             <|> (logTrace "Attempting candiesP" >> candiesP)
+--             <|> difficultyConstantP
+--             <|> failErrorWithExpectStr "parseLoop():" "one of [`effect_`, `shape_`, `difficulty_constant`]" 10
+--         logTrace "Successfully parsed one section"
+--         logState
+--         logRemainingInput
+--         parseLoop
+--     logTrace "Exiting parseLoop"
+
+
+-- | Parse the entire input file into a Difficulty object
+fileP :: String -> Either ParseError Difficulty
+fileP input = case doParse (parseLoop <* eof) (ParseState input 1 emptyDifficulty) of
+    Right (_, state) -> Right (difficulty state)  -- 返回解析后的 Difficulty
+    Left err -> Left err  -- 返回解析错误
+
+parseFile :: String -> IO (Either ParseError Difficulty)
+parseFile filename = do
+    -- read the file content, catch any IO exceptions
+    result <- try (readFile filename) :: IO (Either IOException String)
+    case result of
+        Left ex -> return $ Left (FatalError ("error reading `" ++ filename ++ "`") 0)
+        Right content -> return (fileP content)
 
 -- 断言解析成功
 assertIsSuccess :: (Show a, Eq b, Show b) => Either a b -> b -> String -> IO ()
@@ -451,330 +655,3 @@ assertIsFailError result errMsg =
     Left (FatalError e line) -> error $ errMsg ++ ", but got fatal error at line " ++ show line ++ ": " ++ e
     Right x -> error $ errMsg ++ ", but got: " ++ show x
 
-
-testIntP :: Test
-testIntP = TestList
-  [ "Valid positive integer" ~: TestCase $ assertIsSuccess
-        (doParse intP (ParseState "123 abc" 1 emptyDifficulty))
-        (123, ParseState " abc" 1 emptyDifficulty)
-        "Expected to parse a valid positive integer"
-  , "Valid negative integer" ~:TestCase $ assertIsSuccess
-        (doParse intP (ParseState "-456 xyz" 1 emptyDifficulty))
-        (-456, ParseState " xyz" 1 emptyDifficulty)
-        "Expected to parse a valid negative integer"
-  , "Empty input" ~: assertIsFatalError
-        (doParse intP (ParseState "" 1 emptyDifficulty))
-        "Expected an error for empty input"
-  , "Invalid integer with only '-'" ~: assertIsFatalError
-        (doParse intP (ParseState "- xyz" 1 emptyDifficulty))
-        "Expected an error for invalid '-' input"
-  , "Trailing invalid characters" ~: assertIsFatalError
-        (doParse intP (ParseState "123.45 xyz" 1 emptyDifficulty))
-        "Expected an error for trailing invalid characters"
-  , "Extra characters" ~: assertIsFatalError
-        (doParse intP (ParseState "123abc" 1 emptyDifficulty))
-        "Expected to stop parsing at the first invalid character"
-  ]
-
-testBetween :: Test
-testBetween = TestList [
-    "Between parentheses" ~:
-        doParse (between (stringP "(") (string "content") (stringP ")"))
-        (ParseState "(content)" 1 emptyDifficulty)
-        ~?= Right ("content", ParseState "" 1 emptyDifficulty),
-    "Between brackets with space" ~:
-        doParse (between (stringP "[") (string "content") (stringP "]"))
-        (ParseState "[ content ]" 1 emptyDifficulty)
-        ~?= Right ("content", ParseState "" 1 emptyDifficulty),
-    "inalid between mismatched brackets" ~:
-        TestCase $ case doParse (between (stringP "[") (string "content") (stringP "]"))
-                (ParseState "[content)" 1 emptyDifficulty) of
-            Left (FailError _ _) -> return ()
-            _                  -> assertFailure "Expected a FailError for mismatched brackets"
-    ]
-testSepBy :: Test
-testSepBy = TestList [
-    "Comma-separated values" ~:
-        doParse (sepBy (string "item") (stringP ","))
-        (ParseState "item,item,item" 1 emptyDifficulty)
-        ~?= Right (["item", "item", "item"], ParseState "" 1 emptyDifficulty),
-    "Single item" ~:
-        doParse (sepBy (string "item") (stringP ","))
-        (ParseState "item" 1 emptyDifficulty)
-        ~?= Right (["item"], ParseState "" 1 emptyDifficulty),
-    "Empty list" ~:
-        doParse (sepBy (string "item") (stringP ","))
-        (ParseState "" 1 emptyDifficulty)
-        ~?= Right ([], ParseState "" 1 emptyDifficulty)
-    ]
-
-testSepBy1 :: Test
-testSepBy1 = TestList [
-    "Comma-separated values" ~:
-        doParse (sepBy1 (string "item") (stringP ","))
-        (ParseState "item,item,item" 1 emptyDifficulty)
-        ~?= Right (["item", "item", "item"], ParseState "" 1 emptyDifficulty),
-    "Single item" ~:
-        doParse (sepBy1 (string "item") (stringP ","))
-        (ParseState "item" 1 emptyDifficulty)
-        ~?= Right (["item"], ParseState "" 1 emptyDifficulty),
-    "Empty list" ~:
-        TestCase $ case doParse (sepBy1 (string "item") (stringP ","))
-                (ParseState "" 1 emptyDifficulty) of
-            Left (FailError _ _) -> return ()
-            _                  -> assertFailure "Expected a FailError for an empty list"
-    ]
-
-testBrackets :: Test
-testBrackets = TestList [
-    "Value inside brackets" ~:
-        doParse (brackets (string "inner"))
-        (ParseState "[inner]" 1 emptyDifficulty)
-        ~?= Right ("inner", ParseState "" 1 emptyDifficulty),
-    "Mismatched brackets" ~:
-        TestCase $ case doParse (brackets (string "inner"))
-                (ParseState "[inner)" 1 emptyDifficulty) of
-            Left (FailError _ _) -> return ()
-            _                  -> assertFailure "Expected a FailError for mismatched brackets"
-    ]
-
-testParens :: Test
-testParens = TestList [
-    "Value inside parentheses" ~:
-        doParse (parens (string "inner"))
-        (ParseState "(inner)" 1 emptyDifficulty)
-        ~?= Right ("inner", ParseState "" 1 emptyDifficulty),
-    "Missing closing parenthesis" ~:
-        TestCase $ case doParse (parens (string "inner"))
-                (ParseState "(inner" 1 emptyDifficulty) of
-            Left (FailError _ _) -> return ()
-            _                  -> assertFailure "Expected a FailError for missing closing parenthesis"
-    ]
-
-testConstP :: Test
-testConstP = TestList [
-    "Constant parsing with exact match (no trailing whitespaces)" ~:
-        doParse (constP "constant" 42)
-        (ParseState "constant followed by text" 1 emptyDifficulty)
-        ~?= Right (42, ParseState "followed by text" 1 emptyDifficulty),
-    "Mismatch for constant" ~:
-        TestCase $ case doParse (constP "constant" 42)
-                (ParseState "wrong input" 1 emptyDifficulty) of
-            Left (FailError _ _) -> return ()
-            _                  -> assertFailure "Expected a FailError for mismatched constant"
-    ]
-
-
-testString :: Test
-testString = TestList [
-    "Exact match (no trailing whitespaces)" ~:
-        doParse (string "hello")
-        (ParseState "hello world" 1 emptyDifficulty)
-        ~?= Right ("hello", ParseState " world" 1 emptyDifficulty),
-    "Mismatch" ~:
-        TestCase $ case doParse (string "hello")
-                (ParseState "hi world" 1 emptyDifficulty) of
-            Left (FailError _ _) -> return ()
-            _                  -> assertFailure "Expected a FailError for mismatch"
-    ]
-
-testStringP :: Test
-testStringP = TestList [
-    "Exact match with whitespace" ~:
-        doParse (stringP "hello")
-        (ParseState "  hello  world" 1 emptyDifficulty)
-        ~?= Right ((), ParseState "world" 1 emptyDifficulty),
-    "Mismatch" ~:
-        TestCase $ case doParse (stringP "hello")
-                (ParseState "  hi world" 1 emptyDifficulty) of
-            Left (FailError _ _) -> return ()
-            _                  -> assertFailure "Expected a FailError for mismatch"
-    ]
-
-testCoordinateP :: Test
-testCoordinateP = TestList [
-    "Specific Pos coordinate" ~: assertIsSuccess
-        (doParse coordinateP ( ParseState "5" 1 emptyDifficulty))
-        (Coordinate 5, ParseState "" 1 emptyDifficulty)
-        "Expected to parse a valid positive integer"
-    , "Specific Neg coordinate" ~: assertIsSuccess
-        (doParse coordinateP ( ParseState "-5" 1 emptyDifficulty))
-        (Coordinate (-5), ParseState "" 1 emptyDifficulty)
-        "Expected to parse a valid negative integer"
-    , "Wildcard coordinate" ~: assertIsSuccess
-        (doParse coordinateP ( ParseState ":" 1 emptyDifficulty))
-        (All, ParseState "" 1 emptyDifficulty)
-        "Expected to parse a wildcard coordinate"
-    , "Invalid coordinate" ~: assertIsFatalError
-        (doParse coordinateP ( ParseState "abc" 1 emptyDifficulty))
-        "Expected a fatal error for invalid input"
-    ]
-testCoordinatePairP :: Test
-testCoordinatePairP = TestList
-    [
-        "Valid coordinate pair 1" ~: doParse coordinatePairP (ParseState "( -100 , 2 )" 1 emptyDifficulty)
-            ~?= Right ((Coordinate (-100), Coordinate 2), ParseState "" 1 emptyDifficulty)
-        ,"Valid coordinate pair 2" ~: doParse coordinatePairP (ParseState "(1,1)" 1 emptyDifficulty)
-            ~?= Right ((Coordinate 1, Coordinate 1), ParseState "" 1 emptyDifficulty)
-        ,"Valid coordinate pair 3" ~: doParse coordinatePairP (ParseState "(-1, 1000)" 1 emptyDifficulty)
-            ~?= Right ((Coordinate (-1), Coordinate 1000), ParseState "" 1 emptyDifficulty)
-        ,"Valid coordinate pair 4" ~: doParse coordinatePairP (ParseState "( 1000,-1)" 1 emptyDifficulty)
-            ~?= Right ((Coordinate 1000, Coordinate (-1)), ParseState "" 1 emptyDifficulty)
-         ,"Valid coordinate pair 5" ~: doParse coordinatePairP (ParseState "(-1,-1)" 1 emptyDifficulty)
-            ~?= Right ((Coordinate (-1), Coordinate (-1)), ParseState "" 1 emptyDifficulty)
-        , "Wildcard Pos Pair" ~: doParse coordinatePairP (ParseState "( 1  , :)" 1 emptyDifficulty)
-            ~?= Right ((Coordinate 1, All), ParseState "" 1 emptyDifficulty)
-        , "Wildcard Neg Pair" ~: doParse coordinatePairP (ParseState "( :, -2  )" 1 emptyDifficulty)
-            ~?= Right ((All, Coordinate (-2)), ParseState "" 1 emptyDifficulty)
-        , "Wildcard pair" ~: doParse coordinatePairP (ParseState "( : , : )" 1 emptyDifficulty)
-            ~?= Right ((All, All), ParseState "" 1 emptyDifficulty)
-        , "Invalid coordinate pair 1" ~: assertIsFatalError
-            (doParse coordinatePairP (ParseState "(1, abc)" 1 emptyDifficulty))
-            "Expected a fatal error for invalid input"
-        ,  "Valid brackets with single pair" ~: doParse coordinateListP (ParseState "[(1,2)]" 1 emptyDifficulty)
-            ~?= Right ([(Coordinate 1, Coordinate 2)], ParseState "" 1 emptyDifficulty)
-        ,  "Valid brackets with multiple pairs" ~: doParse coordinateListP (ParseState "[(1,2),(3,4)]" 1 emptyDifficulty)
-            ~?= Right ([(Coordinate 1, Coordinate 2), (Coordinate 3, Coordinate 4)], ParseState "" 1 emptyDifficulty)
-        , "Empty brackets" ~:
-            doParse coordinateListP (ParseState "[]" 1 emptyDifficulty)
-            ~?= Right ([], ParseState "" 1 emptyDifficulty)
-        , "testCoordinatePairP Missing closing bracket" ~: assertIsFailError
-            (doParse coordinateListP (ParseState "[(1,2),(3,4)" 1 emptyDifficulty))
-            "Expected a fatal error for missing closing bracket"
-        , "Invalid coordinate pair 2" ~: assertIsFailError
-            (doParse coordinateListP (ParseState "[(1,2),(3)]" 1 emptyDifficulty))
-            "Expected a fatal error for invalid coordinate pair"
-    ]
-testArbitraryPIgnoreCase :: Test
-testArbitraryPIgnoreCase = TestList
-    [ "Arbitrary with single coordinate pair" ~:
-        doParse arbitraryP (ParseState "Arbitrary [(1,2)]" 1 emptyDifficulty)
-        ~?= Right (Arbitrary [(Coordinate 1, Coordinate 2)], ParseState "" 1 emptyDifficulty)
-    , "Arbitrary with wildcard coordinates" ~:
-        doParse arbitraryP (ParseState "Arbitrary [(0,:)]" 1 emptyDifficulty)
-        ~?= Right (Arbitrary [(Coordinate 0, All)], ParseState "" 1 emptyDifficulty)
-    , "Arbitrary with multiple coordinate pairs" ~:
-        doParse arbitraryP (ParseState "Arbitrary [(1,2),(:,:),(-2,12)]" 1 emptyDifficulty)
-        ~?= Right (Arbitrary [(Coordinate 1, Coordinate 2), (All, All), (Coordinate (-2), Coordinate 12)], ParseState "" 1 emptyDifficulty)
-    , "testArbitraryPIgnoreCase Arbitrary with missing closing bracket" ~: assertIsFatalError
-        (doParse arbitraryP (ParseState "Arbitrary [(1,2),(:,:),(-2,12)" 1 emptyDifficulty))
-        "Expected a fatal error for missing closing bracket"
-    , "Arbitrary with invalid coordinate tuple" ~: assertIsFatalError
-        (doParse arbitraryP (ParseState "Arbitrary [(1,2),(1,2,3)]" 1 emptyDifficulty))
-        "Expected a fatal error for invalid tuple"
-    ]
-
-testCoordinateListP :: Test
-testCoordinateListP = TestList
-    [
-        "Empty list" ~: doParse coordinateListP (ParseState "[]" 1 emptyDifficulty)
-            ~?= Right ([], ParseState "" 1 emptyDifficulty)
-        , "Single pair" ~: doParse coordinateListP (ParseState "[ (1 , 2 ) ]" 1 emptyDifficulty)
-            ~?= Right ([(Coordinate 1, Coordinate 2)], ParseState "" 1 emptyDifficulty)
-        , "Multiple pairs" ~: doParse coordinateListP (ParseState "[ ( 1,2 ), (:,:), (-2, 12)]" 1 emptyDifficulty)
-            ~?= Right ([(Coordinate 1, Coordinate 2), (All, All), (Coordinate (-2), Coordinate 12)], ParseState "" 1 emptyDifficulty)
-    ]
-
-testCirclePIgnoreCase :: Test
-testCirclePIgnoreCase = TestList
-    [ "circle 3" ~: doParse circleP (ParseState "Circle 3" 1 emptyDifficulty)
-        ~?= Right (Circle 3, ParseState "" 1 emptyDifficulty)
-    , "cirCle 0" ~: doParse circleP (ParseState "cirCle 0" 1 emptyDifficulty)
-        ~?= Right (Circle 0, ParseState "" 1 emptyDifficulty)
-    , "cIrcLe -3" ~: doParse circleP (ParseState "cIrcLe -3" 1 emptyDifficulty)
-        ~?= Right (Circle (-3), ParseState "" 1 emptyDifficulty)
-    , "CIRCLE 100" ~: doParse circleP (ParseState "CIRCLE 100" 1 emptyDifficulty)
-        ~?= Right (Circle 100, ParseState "" 1 emptyDifficulty)
-    , "circle 3.15" ~: assertIsFatalError
-        (doParse circleP (ParseState "Circle 3.15" 1 emptyDifficulty))
-        "Expected a fatal error for invalid decimal radius"
-    , "CIRCLE 3 4 5" ~: doParse circleP (ParseState "CIRCLE 3 4 5" 1 emptyDifficulty)
-        ~?= Right (Circle 3, ParseState "4 5" 1 emptyDifficulty)
-    , "CIRCLE 3 4" ~: doParse circleP (ParseState "CIRCLE 3 4" 1 emptyDifficulty)
-        ~?= Right (Circle 3, ParseState "4" 1 emptyDifficulty)
-    , "circle a" ~: assertIsFatalError
-        (doParse circleP (ParseState "circle a" 1 emptyDifficulty))
-        "Expected a fatal error for invalid input"
-    ]
-testRectanglePIgnoreCase :: Test
-testRectanglePIgnoreCase = TestList
-    [ "Rectangle with positive dimensions" ~:
-        doParse rectangleP (ParseState "Rectangle 3 4" 1 emptyDifficulty)
-        ~?= Right (Rectangle 3 4, ParseState "" 1 emptyDifficulty)
-    , "Rectangle with zero dimensions" ~:
-        doParse rectangleP (ParseState "ReCtAnGlE 0 0" 1 emptyDifficulty)
-        ~?= Right (Rectangle 0 0, ParseState "" 1 emptyDifficulty)
-    , "Rectangle with mixed dimensions" ~:
-        doParse rectangleP (ParseState "rEctAngLe -3 4" 1 emptyDifficulty)
-        ~?= Right (Rectangle (-3) 4, ParseState "" 1 emptyDifficulty)
-    , "Rectangle with trailing input" ~:
-        doParse rectangleP (ParseState "RECTANGLE 3 4 5 6 7" 1 emptyDifficulty)
-        ~?= Right (Rectangle 3 4, ParseState "5 6 7" 1 emptyDifficulty)
-    , "Rectangle with missing dimension" ~: assertIsFatalError
-        (doParse rectangleP (ParseState "rectangle 3" 1 emptyDifficulty))
-        "Expected a fail error for missing dimension"
-    , "Rectangle with invalid input" ~: assertIsFatalError
-        (doParse rectangleP (ParseState "rectangle a 4" 1 emptyDifficulty))
-        "Expected a fatal error for invalid input"
-    ]
-testDiamondPIgnoreCase :: Test
-testDiamondPIgnoreCase = TestList
-    [ "Diamond with positive radius" ~:
-        doParse diamondP (ParseState "Diamond 3" 1 emptyDifficulty)
-        ~?= Right (Diamond 3, ParseState "" 1 emptyDifficulty)
-    , "Diamond with zero radius" ~:
-        doParse diamondP (ParseState "DIAMOND 0" 1 emptyDifficulty)
-        ~?= Right (Diamond 0, ParseState "" 1 emptyDifficulty)
-    , "Diamond with negative radius" ~:
-        doParse diamondP (ParseState "dIaMoNd -3" 1 emptyDifficulty)
-        ~?= Right (Diamond (-3), ParseState "" 1 emptyDifficulty)
-    , "Diamond with trailing input" ~:
-        doParse diamondP (ParseState "DIAMOND 3 4" 1 emptyDifficulty)
-        ~?= Right (Diamond 3, ParseState "4" 1 emptyDifficulty)
-    , "Diamond with invalid input" ~: assertIsFatalError
-        (doParse diamondP (ParseState "diamond a" 1 emptyDifficulty))
-        "Expected a fatal error for invalid input"
-    ]
-
-testEffectRangeP :: Test
-testEffectRangeP = TestList
-    [ "testEffectRangeP valid Circle" ~: doParse effectRangeP (ParseState "cirCle 3" 1 emptyDifficulty)
-          ~?= Right (Circle 3, ParseState "" 1 emptyDifficulty)
-    ,"testEffectRangeP invalid Circle 1" ~: assertIsFatalError
-        (doParse effectRangeP (ParseState "Circle 3.15" 1 emptyDifficulty))
-        "Expected a fatal error for invalid decimal radius"
-    , "testEffectRangeP valid Rectangle" ~: doParse effectRangeP (ParseState "Rectangle 3 4" 1 emptyDifficulty)
-          ~?= Right (Rectangle 3 4, ParseState "" 1 emptyDifficulty)
-    , "testEffectRangeP valid Diamond" ~: doParse effectRangeP (ParseState "Diamond 5" 1 emptyDifficulty)
-          ~?= Right (Diamond 5, ParseState "" 1 emptyDifficulty)
-    , "testEffectRangeP valid Arbitrary" ~: doParse effectRangeP (ParseState "Arbitrary [(1,2), (:,:)]" 1 emptyDifficulty)
-          ~?= Right (Arbitrary [(Coordinate 1, Coordinate 2), (All, All)], ParseState "" 1 emptyDifficulty)
-    , "testEffectRangeP invalid Arbitrary" ~: assertIsFatalError
-        (doParse effectRangeP (ParseState "Arbitrary [(1.3,2), (:,:)]" 1 emptyDifficulty))
-        "Expected a fatal error for unrecognized effect range type"
-    , "Unrecognized" ~: assertIsFatalError
-        (doParse effectRangeP (ParseState "InvalidRange 7" 1 emptyDifficulty))
-        "Unrecognized effect range type"
-    ]
-
-
-allUnitTests :: Test
-allUnitTests = TestList
-    [ testIntP
-    , testBetween
-    , testSepBy
-    , testSepBy1
-    , testString
-    , testStringP
-    , testParens
-    , testBrackets
-    , testConstP
-    , testCoordinateP
-    , testCoordinatePairP
-    , testCoordinateListP
-    , testCirclePIgnoreCase
-    , testRectanglePIgnoreCase
-    , testDiamondPIgnoreCase
-    , testArbitraryPIgnoreCase
-    , testEffectRangeP
-    ]

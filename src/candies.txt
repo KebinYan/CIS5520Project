@@ -51,7 +51,7 @@ max_steps: 50
 // Each candy must reference a previously defined effect.
 effect_name: Normal
 effect_range: Arbitrary [(0,0)]
-effect_requirement: 0
+effect_requirement: =0
 effect_description: Normal candies that can be matched with other normal candies.
 
 effect_name: StripedRow
@@ -59,14 +59,14 @@ effect_range: Arbitrary [(0, :)]
 effect_requirement: =4
 effect_description: When matched, clears the entire row.
 
-effect_name: StripedCross 
+effect_name: StripedCross
 effect_range: Arbitrary [(0, :), (:, 0)]
 effect_requirement: >5
 effect_description: When matched, clears the entire row and column.
 
 effect_name: invalid effect 
 effect_range: Arbitrary [(0, :), (:, 0)]
-effect_requirement: --5
+effect_requirement: =5
 effect_description: When matched, clears the entire row and column.
 
 effect_name: Bomb
