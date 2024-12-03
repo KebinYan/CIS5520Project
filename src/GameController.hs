@@ -13,64 +13,10 @@ import Control.Applicative
 import Control.Monad.IO.Class
 
 import GameState
-import Candy
 import GameUtils
-import CandyCrushParser
 import Prelude
-
--- Define actions
-data Action = Swap CoordinatePair CoordinatePair
-            | Click CoordinatePair
-            | Hint
-            | Undo
-            | Quit
-            | Trigger (CoordinatePair, Candy)
-            | Disappear [CoordinatePair]
-    deriving (Show)
-
-instance Eq Action where
-    (==) :: Action -> Action -> Bool
-    (Swap c1 c2) == (Swap c3 c4) =
-        (c1 == c3 && c2 == c4) || (c1 == c4 && c2 == c3)
-    (Click c1) == (Click c2) = c1 == c2
-    Undo == Undo = True
-    Quit == Quit = True
-    (Trigger (c1, candy1)) == (Trigger (c2, candy2)) =
-        c1 == c2 && candy1 == candy2
-    (Disappear cs1) == (Disappear cs2) =
-        all (`elem` cs2) cs1 && length cs1 == length cs2
-    _ == _ = False
-
--- Constructor for Disappear action that sorts the coordinates
-constructDisappear :: [CoordinatePair] -> Action
-constructDisappear = Disappear . sortCoordinates
-    where
-        sortCoordinates =
-            sortBy (\(x1, y1) (x2, y2) -> compare (x1, y1) (x2, y2))
-
--- define the precedence of actions
-instance Ord Action where
-    compare :: Action -> Action -> Ordering
-    compare Quit _ = LT
-    compare Undo _ = LT
-    compare Hint _ = LT
-    compare (Swap _ _) _ = LT
-    compare (Click _) _ = LT
-    compare (Disappear cs1) (Disappear cs2) =
-        compare (sort cs1) (sort cs2)
-    compare (Disappear _) _ = LT
-    compare (Trigger (c1, _)) (Trigger (c2, _)) = compare c1 c2
-    compare (Trigger _) _ = LT
-
--- Define action result
-data ActionResult = ActionResult {
-    grid :: GameGrid,
-    actions :: [Action]
-} deriving (Eq, Show)
-
--- Constructor for ActionResult with sorted actions
-constructActionResult :: GameGrid -> [Action] -> ActionResult
-constructActionResult g actions = ActionResult g (sort actions)
+import Phd
+import CandyCrushParser
 
 -- The main game loop
 gameLoop :: Difficulty -> IO ()
@@ -97,8 +43,9 @@ gameStep state = do
     putStr "Enter your action (swap x1 y1 x2 y2 / click x y / hint / undo / quit): "
     hFlush stdout
 
-    input <- getLine
-    case parseAction input of
+    input <- candyGetLine
+    let dim = dimension (difficulty state)
+    case parseAction dim input of
         Right action ->
             case action of
                 Quit -> putStrLn "Quitting game"
@@ -113,40 +60,9 @@ gameStep state = do
                     updatedState <- handleAction True state action
                     stableState <- fillAndCrushStateIO updatedState
                     gameStep stableState
-        Left _       -> do
+        Left _      -> do
             putStrLn "Invalid action, please try again."
             gameStep state
-
-parseAction :: String -> Either ParseError Action
-parseAction input = doParse actionParser (ParseState input 1 emptyDifficulty) >>= \(action, _) -> Right action
-
-actionParser :: Parser Action
-actionParser = wsP $ choice
-    [ parseSwap
-    , parseClick
-    , parseConstantAction "undo" Undo
-    , parseConstantAction "quit" Quit
-    , parseConstantAction "hint" Hint
-    ]
-
--- 解析 "swap" 动作
-parseSwap :: Parser Action
-parseSwap = do
-    stringP "swap"
-    firstPair <- wsP coordinatePairP
-    secondPair <- wsP coordinatePairP
-    return $ Swap firstPair secondPair
-
--- 解析 "click" 动作
-parseClick :: Parser Action
-parseClick = do
-    stringP "click"
-    coordPair <- wsP coordinatePairP
-    return $ Click coordPair
-
--- 解析常量动作 ("undo", "quit", "hint")
-parseConstantAction :: String -> Action -> Parser Action
-parseConstantAction keyword action = stringP keyword *> pure action
 
 handleAction :: Bool -> GameState -> Action -> IO GameState
 handleAction verbose state action = case action of

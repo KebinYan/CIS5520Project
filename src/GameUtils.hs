@@ -1,6 +1,5 @@
 module GameUtils where
-
-import Candy
+import Phd
 import GHC.Base (error)
 import System.Random
 import Control.Monad (replicateM)

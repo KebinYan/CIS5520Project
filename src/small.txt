@@ -17,3 +17,11 @@ effect_description: When matched, clears all candies in a 3x3 area.
 DIFFICULTY_CONSTANT
 dimension: 5
 max_steps: 50
+
+shape_name: Triangle
+shape_icon: ▲
+effect_name: Normal
+
+shape_name: Square
+shape_icon: ■
+effect_name: Normal

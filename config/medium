@@ -1,0 +1,21 @@
+effect_name: Normal
+effect_range: Arbitrary [(0, 0)]
+effect_requirement: =0
+effect_description: Matches normal candies with other normal candies.
+
+effect_name: StripedRow
+effect_range: Arbitrary [(0, :)]
+effect_requirement: =4
+effect_description: Clears the entire row when matched.
+
+DIFFICULTY_CONSTANT
+dimension: 7
+max_steps: 40
+
+shape_name: Circle
+shape_icon: O
+effect_name: Normal
+
+shape_name: Minus
+shape_icon: -
+effect_name: StripedRow

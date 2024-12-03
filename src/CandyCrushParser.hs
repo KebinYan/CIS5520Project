@@ -12,72 +12,9 @@ import Data.Map (Map)
 import qualified Data.Set as Set
 import qualified Data.Map as Map
 import qualified Prelude as P
-import Constants
-import Candy
-import qualified Constants as Constant
 import Control.Exception (IOException, try)
-import qualified Data.Maybe
-
-type Name = String
-
--- | Difficulty level with various parameters
-data Difficulty = Difficulty
-  { dimension :: Int
-  , candyMap  :: Map Name Candy
-  , effectMap :: Map Name Effect
-  , maxSteps  :: Int
-  } deriving (Show, Eq)
-
--- | An empty Difficulty with default values
-emptyDifficulty :: Difficulty
-emptyDifficulty = Difficulty 0 (Map.singleton "Normal" normalCandy) (Map.singleton "Normal" normalEffect) 0
-
--- | Parser state containing the input, current line number, and difficulty
-data ParseState = ParseState
-  { input      :: String       -- ^ Current input
-  , lineNum    :: Int          -- ^ Current line number
-  , difficulty :: Difficulty   -- ^ Current context's Difficulty
-  } deriving (Show, Eq)
-
--- | Possible parse errors
-data ParseError = FatalError String Int | FailError String Int
-  deriving (Eq)
-
-instance Show ParseError where
-  show (FatalError msg line) =
-    "Fatal error at line " ++ show line ++ ": " ++ msg
-  show (FailError msg line) =
-    "Error at line " ++ show line ++ ": " ++ msg
-
--- | Parser type definition
-newtype Parser a = P { doParse :: ParseState -> Either ParseError (a, ParseState) }
-  deriving Functor
-
-instance Applicative Parser where
-  pure x = P $ \s -> Right (x, s)
-  p1 <*> p2 = P $ \s -> case doParse p1 s of
-    Left (FatalError msg line) -> Left (FatalError msg line)  -- Stop on fatal error
-    Left err -> Left err                                      -- Propagate other errors
-    Right (f, s') -> case doParse p2 s' of                    -- Apply function if p1 succeeds
-      Left err -> Left err
-      Right (a, s'') -> Right (f a, s'')
-
-instance Alternative Parser where
-  empty = P $ \state -> Left (FailError "No parses" (lineNum state))
-  p1 <|> p2 = P $ \state -> case doParse p1 state of
-    Left (FatalError msg line) -> Left (FatalError msg line)  -- Stop on fatal error
-    Left (FailError _ _) -> doParse p2 state                  -- Try p2 on failure
-    success -> success                                        -- Return success
-
-instance Monad Parser where
-  return = pure
-  (>>=) = bindParser
-
-bindParser :: Parser a -> (a -> Parser b) -> Parser b
-bindParser p f = P $ \s -> case doParse p s of
-  Left (FatalError msg line) -> Left (FatalError msg line)    -- Return fatal errors
-  Left err -> Left err                                        -- Propagate other errors
-  Right (a, s') -> doParse (f a) s'                           -- Continue with f a
+import System.IO
+import Phd
 
 -- | Throw a fatal error with a message
 fatalError :: String -> Parser a
@@ -422,7 +359,7 @@ effectDescriptionP = do
 
 -- | Update the Difficulty state with a modification function
 updateDifficulty :: (Difficulty -> Difficulty) -> Parser ()
-updateDifficulty f = P $ \state -> Right ((), state { difficulty = f (difficulty state) })
+updateDifficulty f = P $ \state -> Right ((), state { pDifficulty = f (pDifficulty state) })
 
 -- | Parse an effect block
 effectP :: Parser ()
@@ -507,7 +444,7 @@ effectNameRefP = do
 -- | Retrieve the Effect from the effectMap based on name
 effectNameToEffect :: String -> Parser Effect
 effectNameToEffect name = do
-  difficultyVal <- P $ \state -> Right (difficulty state, state)
+  difficultyVal <- P $ \state -> Right (pDifficulty state, state)
   case Map.lookup name (effectMap difficultyVal) of
     Just effect -> return effect
     Nothing -> fatalError $ "Effect `" ++ name ++ "` not found in the effect map"
@@ -544,22 +481,79 @@ parseLoop = do
         "one of [`effect_`, `shape_`, `difficulty_constant`]" 10
     parseLoop
 
+{------------------------ Action Parsing ------------------------}
+actionIntP :: Int -> String -> Parser Int
+actionIntP dim errorMessage = do
+    coord <- wsP intP
+    if coord < 0 || coord >= dim
+        then failError errorMessage
+        else return coord
+
+parseAction :: Int -> String -> Either ParseError Action
+parseAction dim input = doParse (actionParser dim) (ParseState input 1 emptyDifficulty) >>= \(action, _) -> Right action
+
+actionParser :: Int -> Parser Action
+actionParser dim = wsP $
+    parseSwap dim <|> 
+    parseClick dim <|> 
+    parseConstantAction "undo" Undo <|> 
+    parseConstantAction "quit" Quit <|> 
+    parseConstantAction "hint" Hint
+
+-- parse "swap" action
+parseSwap :: Int -> Parser Action
+parseSwap dim = do
+    stringP "swap"
+    x1 <- actionIntP dim "x1 must be within the grid and non-negative"
+    y1 <- actionIntP dim "y1 must be within the grid and non-negative"
+    x2 <- actionIntP dim "x2 must be within the grid and non-negative"
+    y2 <- actionIntP dim "y2 must be within the grid and non-negative"
+    return $ Swap (Coordinate x1, Coordinate y1) (Coordinate x2, Coordinate y2)
+
+-- parse "click" action
+parseClick :: Int -> Parser Action
+parseClick dim = do
+    stringP "click"
+    x <- actionIntP dim "x must be within the grid and non-negative"
+    y <- actionIntP dim "y must be within the grid and non-negative"
+    return $ Click (Coordinate x, Coordinate y)
+
+-- parse constant actions
+parseConstantAction :: String -> Action -> Parser Action
+parseConstantAction keyword action = stringP keyword *> pure action
+
+{---------------------------- Input Parse ------------------------------}
+-- Custom input function supporting backspace
+candyGetLine :: IO String
+candyGetLine = do
+    hSetEcho stdin False        -- Disable echo
+    hSetBuffering stdin NoBuffering -- Read input character by character
+    inputLoop ""
+  where
+    inputLoop :: String -> IO String
+    inputLoop acc = do
+        char <- getChar
+        case char of
+            '\n' -> do                 -- Handle Enter key
+                putChar '\n'
+                return acc
+            '\DEL' -> do               -- Handle Backspace key
+                if null acc
+                    then inputLoop acc -- Ignore if no characters to delete
+                    else do
+                        putStr "\b \b" -- Erase character on terminal
+                        inputLoop (init acc) -- Remove last character from input
+            _ | isPrint char -> do     -- Handle printable characters
+                    putChar char       -- Display the character
+                    inputLoop (acc ++ [char]) -- Add character to input
+              | otherwise -> inputLoop acc -- Ignore other control characters
+{---------------------------- File Parse ------------------------------}
 -- | Parse the entire input file into a Difficulty object
 fileP :: String -> Either ParseError Difficulty
 fileP input = case doParse (parseLoop <* eof)
   (ParseState input 1 emptyDifficulty) of
-    Right (_, state) -> Right (difficulty state)  -- Return the parsed Difficulty
+    Right (_, state) -> Right (pDifficulty state)  -- Return the parsed Difficulty
     Left err -> Left err                           -- Return the parse error
-
--- | Parse a file into a Difficulty object, handling IO exceptions
--- parseFile :: String -> IO (Either ParseError Difficulty)
--- parseFile filename = do
---   -- Read the file content, catch any IO exceptions
---   result <- try (readFile filename) :: IO (Either IOException String)
---   case result of
---     Left ex -> return $ Left (FatalError ("error reading `"
---       ++ filename ++ "`") 0)
---     Right content -> return (fileP content)
 
 -- | Take a filename and return the parsed Difficulty object
 parseFile :: String -> IO (Either ParseError Difficulty)

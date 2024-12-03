@@ -1,0 +1,77 @@
+effect_name: Normal
+effect_range: Arbitrary [(0, 0)]
+effect_requirement: =0
+effect_description: Matches normal candies with other normal candies.
+
+effect_name: CircleBomb
+effect_range: Circle 2
+effect_requirement: =5
+effect_description: Clears a circular area of radius 2 when matched.
+
+effect_name: DiamondBomb
+effect_range: Diamond 2
+effect_requirement: =5
+effect_description: Clears a diamond-shaped area of radius 2 when matched.
+
+effect_name: Bomb
+effect_range: Rectangle 3 3
+effect_requirement: =5
+effect_description: Clears all candies in a 3x3 area when matched.
+
+effect_name: StripedCross
+effect_range: Arbitrary [(0, :), (:, 0)]
+effect_requirement: >= 5
+effect_description: Clears the entire row and column when matched.
+
+effect_name: StripedRow
+effect_range: Arbitrary [(0, :)]
+effect_requirement: =4
+effect_description: Clears the entire row when matched.
+
+DIFFICULTY_CONSTANT
+dimension: 9
+max_steps: 30
+
+shape_name: Triangle
+shape_icon: 🔺
+effect_name: Normal
+
+shape_name: Ice
+shape_icon: 🧊
+effect_name: Normal
+
+shape_name: Burger
+shape_icon: 🍔
+effect_name: Normal
+
+shape_name: Heart
+shape_icon: 💖
+effect_name: Normal
+
+shape_name: donuts
+shape_icon: 🍩
+effect_name: Normal
+
+shape_name: Pancake
+shape_icon: 🥞
+effect_name: Normal
+
+shape_name: CircleBomb
+shape_icon: ⚽️
+effect_name: CircleBomb
+
+shape_name: DiamondBomb
+shape_icon: 💠
+effect_name: DiamondBomb
+
+shape_name: Bomb
+shape_icon: 💣
+effect_name: Bomb
+
+shape_name: StripedCross
+shape_icon: ☩
+effect_name: StripedCross
+
+shape_name: StripedRow
+shape_icon: 🍭
+effect_name: StripedRow
