@@ -15,7 +15,7 @@ import Control.Monad.IO.Class
 import GameState
 import Candy
 import GameUtils
-import Parser hiding (intP)
+import CandyCrushParser
 import Prelude
 
 -- Define actions
@@ -118,18 +118,35 @@ gameStep state = do
             gameStep state
 
 parseAction :: String -> Either ParseError Action
-parseAction = parse actionParser
+parseAction input = doParse actionParser (ParseState input 1 emptyDifficulty) >>= \(action, _) -> Right action
 
 actionParser :: Parser Action
 actionParser = wsP $ choice
-    [ Swap <$> (string "swap" *>
-                ((,) <$> wsP coordinateP <*> wsP coordinateP)) <*>
-                ((,) <$> wsP coordinateP <*> wsP coordinateP)
-    , Click <$> (string "click" *> ((,) <$> wsP coordinateP <*> wsP coordinateP))
-    , string "undo" *> pure Undo
-    , string "quit" *> pure Quit
-    , string "hint" *> pure Hint
+    [ parseSwap
+    , parseClick
+    , parseConstantAction "undo" Undo
+    , parseConstantAction "quit" Quit
+    , parseConstantAction "hint" Hint
     ]
+
+-- 解析 "swap" 动作
+parseSwap :: Parser Action
+parseSwap = do
+    stringP "swap"
+    firstPair <- wsP coordinatePairP
+    secondPair <- wsP coordinatePairP
+    return $ Swap firstPair secondPair
+
+-- 解析 "click" 动作
+parseClick :: Parser Action
+parseClick = do
+    stringP "click"
+    coordPair <- wsP coordinatePairP
+    return $ Click coordPair
+
+-- 解析常量动作 ("undo", "quit", "hint")
+parseConstantAction :: String -> Action -> Parser Action
+parseConstantAction keyword action = stringP keyword *> pure action
 
 handleAction :: Bool -> GameState -> Action -> IO GameState
 handleAction verbose state action = case action of

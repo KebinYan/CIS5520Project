@@ -41,12 +41,11 @@ library
   import:
       common-stanza
   exposed-modules:
-      Lib
       Candy
       GameController
       GameState
       GameUtils
-      Parser
+      CandyCrushParser
       TestUtils
       -- if you add modules to your project, list them here
       -- so that they will be available to the executable and test suite

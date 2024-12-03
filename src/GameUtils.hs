@@ -157,6 +157,7 @@ extractSpecialCandies dim = foldr extractSpecialCandy Data.Map.empty
                     if n < dim * dim
                     then foldr (\i -> insertWith (++) i [candy]) acc [n + 1.. dim * dim]
                     else acc
+                _ -> acc
 
 -- | Reedem a special candy based on the number of candies in the list
 redeemSpecialCandy :: Int -> Map Int [Candy] -> IO (Maybe Candy)
