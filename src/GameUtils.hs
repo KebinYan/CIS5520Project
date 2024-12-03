@@ -144,16 +144,16 @@ extractSpecialCandies dim = foldr extractSpecialCandy Data.Map.empty
         extractSpecialCandy candy acc =
             let req = effectRequirement (candyEffect candy)
             in case req of
-                Requirement Eq 0 -> acc
-                Requirement Eq n ->
+                EffectRequirement Eq 0 -> acc
+                EffectRequirement Eq n ->
                     if n < dim * dim
                     then insertWith (++) n [candy] acc
                     else acc
-                Requirement Ge n ->
+                EffectRequirement Ge n ->
                     if n < dim * dim
                     then foldr (\i -> insertWith (++) i [candy]) acc [n.. dim * dim]
                     else acc
-                Requirement Gt n ->
+                EffectRequirement Gt n ->
                     if n < dim * dim
                     then foldr (\i -> insertWith (++) i [candy]) acc [n + 1.. dim * dim]
                     else acc

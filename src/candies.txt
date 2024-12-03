@@ -7,7 +7,7 @@
 // - `effect_range`: The range of the effect.
 // - `effect_requirement`: The number of candies required to trigger the effect. 
 //    - Effects with the same requirement may randomly trigger if matched simultaneously.
-//    - Supports comparison operators such as `>` (default is `=`).
+//    - Supports comparison operators [`>`, `>=`, `=`] (default is `=`).
 // - `effect_description`: A textual explanation of the effect.
 //
 // Range Definitions:
@@ -43,36 +43,45 @@
 // - `y = :`: Includes all positions in the current column.
 // Example: `[(0, :), (:, 0)]` represents an entire row and column crossing `(x, y)`.
 
+DIFFICULTY_CONSTANT
+dimension: 5
+max_steps: 50
+
 // # Self-Defined Effects
 // Each candy must reference a previously defined effect.
 effect_name: Normal
-effect_range: Arbitrary [(0, 0)]
-effect_requirement: 0
+effect_range: Arbitrary [(0,0)]
+effect_requirement: =0
 effect_description: Normal candies that can be matched with other normal candies.
 
 effect_name: StripedRow
 effect_range: Arbitrary [(0, :)]
-effect_requirement: 4
+effect_requirement: =4
 effect_description: When matched, clears the entire row.
 
-effect_name: StripedCross 
+effect_name:   StripedCross  
 effect_range: Arbitrary [(0, :), (:, 0)]
 effect_requirement: >5
 effect_description: When matched, clears the entire row and column.
 
+effect_name: some_effect 
+effect_range: Arbitrary [(0, :), (:, 0)]
+effect_requirement: =5
+effect_description: When matched, clears the entire row and column.
+
 effect_name: Bomb
 effect_range: Rectangle 3 3
-effect_requirement: 5
-effect_description: When matched, clears all candies in a 3x3 area.
+effect_requirement: =5
+effect_description: When matched, clears all candies in a 3x3 area. 
 
-effect_name: CircleBomb
+effect_name: CircleBomb 
 effect_range: Circle 2
-effect_requirement: 5
+effect_requirement: =5
 effect_description: When matched, clears all candies in the circular area with radius 2.
 
-effect_name: DiamondBomb
+effect_name:  DiamondBomb 
 effect_range: Diamond 2
-effect_requirement: 5
+effect_requirement: =5
 effect_description: When matched, clears all candies in the diamond-shaped area with radius 2.
 
 // # Self-Defined Candies
@@ -110,13 +119,17 @@ shape_name: Circle
 shape_icon: ●
 effect_name: CircleBomb
 
-shape_name: Diamond
+shape_name: Diamond 
 shape_icon: ♦
 effect_name: DiamondBomb
 
-shape_name: Cross
+shape_name: Cross  
 shape_icon: ✚
-effect_name: StripedCross
+effect_name: StripedCross 
+
+// shape_name: invalid
+// shape_icon: xxx
+// effect_name: invalid effect
 
 shape_name: Minus
 shape_icon: - 

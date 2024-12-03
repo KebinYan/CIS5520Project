@@ -10,8 +10,7 @@ module Parser(Parser, doParse, wsP,
               satisfy, alpha, digit, upper, lower, space,
               char, string, intP,
               chainl1, chainl, choice,
-              between, sepBy1, sepBy,
-              lookAhead, manyTill, anyChar, try) where
+              between, sepBy1, sepBy) where
 
 import Prelude hiding (filter)
 import Data.List (isPrefixOf)
@@ -180,20 +179,4 @@ sepBy p sep = sepBy1 p sep <|> pure []
 sepBy1 :: Parser a -> Parser sep -> Parser [a]
 sepBy1 p sep = (:) <$> p <*> many (sep *> p)
 
----------------------------------------------
--- | Parses any character
-anyChar :: Parser Char
-anyChar = satisfy (const True)
-
--- | Parses 'p' until parser 'end' succeeds
-manyTill :: Parser a -> Parser end -> Parser [a]
-manyTill p end = ([] <$ end) <|> ((:) <$> p <*> manyTill p end)
-
--- | Parses 'p' without consuming input
-lookAhead :: Parser a -> Parser a
-lookAhead p = P $ \s -> do
-    (result, _) <- doParse p s
-    return (result, s)
-
-try :: Parser a -> Parser a
-try p = P $ \s ->  doParse p s <|> Nothing-- if p fails, return Nothing, otherwise return Just
+--------------------------------------------

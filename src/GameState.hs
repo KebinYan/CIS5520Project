@@ -34,7 +34,7 @@ easy = Difficulty {
         }, candyEffect = Effect {
           effectName = "StripedRow",
           effectRange = Arbitrary [(Coordinate 0, All)],
-          effectRequirement = Requirement Eq 4,
+          effectRequirement = EffectRequirement Eq 4,
           effectDescription = "placeholder"
         } }
     ],
@@ -58,7 +58,7 @@ medium = Difficulty {
         }, candyEffect = Effect {
           effectName = "StripedRow",
           effectRange = Arbitrary [(Coordinate 0, All)],
-          effectRequirement = Requirement Eq 4,
+          effectRequirement = EffectRequirement Eq 4,
           effectDescription = "placeholder"
         } }
     ],
@@ -110,7 +110,7 @@ hard = Difficulty {
               candyEffect = Effect {
                 effectName = "CircleBomb",
                 effectRange = Circle 2,
-                effectRequirement = Requirement Eq 5,
+                effectRequirement = EffectRequirement Eq 5,
                 effectDescription = "placeholder"
               } },
               Candy { candyDef = CandyDefinition {
@@ -121,7 +121,7 @@ hard = Difficulty {
               candyEffect = Effect {
                 effectName = "DiamondBomb",
                 effectRange = Diamond 2,
-                effectRequirement = Requirement Eq 5,
+                effectRequirement = EffectRequirement Eq 5,
                 effectDescription = "placeholder"
               } },
               Candy { candyDef = CandyDefinition {
@@ -132,7 +132,7 @@ hard = Difficulty {
               candyEffect = Effect {
                 effectName = "Bomb",
                 effectRange = Rectangle 3 3,
-                effectRequirement = Requirement Eq 5,
+                effectRequirement = EffectRequirement Eq 5,
                 effectDescription = "placeholder"
               } },
               Candy { candyDef = CandyDefinition {
@@ -143,7 +143,7 @@ hard = Difficulty {
               candyEffect = Effect {
                 effectName = "StripedCross",
                 effectRange = Arbitrary [(Coordinate 0, All), (All, Coordinate 0)],
-                effectRequirement = Requirement Ge 5,
+                effectRequirement = EffectRequirement Ge 5,
                 effectDescription = "placeholder"
               } },
               Candy { candyDef = CandyDefinition {
@@ -153,7 +153,7 @@ hard = Difficulty {
               }, candyEffect = Effect {
                 effectName = "StripedRow",
                 effectRange = Arbitrary [(Coordinate 0, All)],
-                effectRequirement = Requirement Eq 4,
+                effectRequirement = EffectRequirement Eq 4,
                 effectDescription = "placeholder"
               } }],
     maxSteps = 30

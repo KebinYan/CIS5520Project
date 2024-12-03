@@ -1,0 +1,9 @@
+effect_name: StripedCross 
+effect_range: Arbitrary [(0, :), (:, 0)]
+effect_requirement: >5
+effect_description: When matched, clears the entire row and column.
+
+effect_name: invalid effect 
+effect_range: Arbitrary [(0, :), (]
+effect_requirement: --5
+effect_description: When matched, clears the entire row and column.

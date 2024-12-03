@@ -15,7 +15,7 @@ import Control.Monad.IO.Class
 import GameState
 import Candy
 import GameUtils
-import Parser
+import Parser hiding (intP)
 import Prelude
 
 -- Define actions

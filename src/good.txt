@@ -1,0 +1,25 @@
+DIFFICULTY_CONSTANT
+dimension: 5
+max_steps: 50
+effect_name: StripedCross
+effect_range: Arbitrary [(0, :), (:, 0)]
+effect_requirement: >5
+effect_description: When matched, clears the entire row and column.
+
+effect_name: some effect
+effect_range: Arbitrary [(0, :), (:, 0)]
+effect_requirement: =5
+effect_description: When matched, clears the entire row and column.
+
+effect_name: StripedCross
+effect_range: Arbitrary [(0, :), (:, 0)]
+effect_requirement: >5
+effect_description: When matched, clears the entire row and column.
+
+shape_name: Triangle
+shape_icon: ▲
+effect_name: StripedCross
+
+shape_name: Candy
+shape_icon: 🍭
+effect_name: some effect
