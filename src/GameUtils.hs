@@ -4,7 +4,8 @@ import Candy
 import GHC.Base (error)
 import System.Random
 import Control.Monad (replicateM)
-import Data.Map (Map, insertWith, empty, lookup)
+import Data.Map (Map, insertWith, empty, lookup, fromList)
+import Data.Maybe (fromMaybe)
 import qualified Data.Set as Set
 
 -- Generate a random Candy based on a provided list of CandyShape
@@ -169,12 +170,24 @@ redeemSpecialCandy n specialCandies = do
             _ -> return Nothing
 
 candyToSymbol :: Candy -> String
-candyToSymbol EmptyCandy = " "
+candyToSymbol EmptyCandy = "  "
 candyToSymbol candy =
     let color = case effectName (candyEffect candy) of
             "Normal" -> "\ESC[30m"
             _ -> "\ESC[91m"
     in color ++ shapeIcon (candyDef candy) ++ "\ESC[0m"
+
+digitToEmoji :: Map Char String
+digitToEmoji = fromList
+    [ ('0', "0️⃣"), ('1', "1️⃣"), ('2', "2️⃣"), ('3', "3️⃣"), ('4', "4️⃣")
+    , ('5', "5️⃣"), ('6', "6️⃣"), ('7', "7️⃣"), ('8', "8️⃣"), ('9', "9️⃣")
+    ]
+
+rowNumToEmoji :: Int -> String
+rowNumToEmoji n
+    | n < 0     = error "Negative row numbers are not supported"
+    | otherwise = concatMap (\c -> fromMaybe "?" (Data.Map.lookup c digitToEmoji) ++ " ") (show n)
+
 
 -- Fill the entire board row by row
 fillBoard :: [[Candy]] -> [Candy] -> IO [[Candy]]

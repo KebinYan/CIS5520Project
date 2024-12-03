@@ -68,43 +68,43 @@ hard = Difficulty {
     dimension = 9,
     candies = [Candy { candyDef = CandyDefinition {
                 shapeName = "Triangle",
-                shapeIcon = "▲",
+                shapeIcon = "🔺",
                 effectNameRef = "Normal"
                 },
               candyEffect = normalEffect },
               Candy { candyDef = CandyDefinition {
                 shapeName = "Square",
-                shapeIcon = "■",
+                shapeIcon = "🧊",
                 effectNameRef = "Normal"
                 },
               candyEffect = normalEffect },
               Candy { candyDef = CandyDefinition {
                 shapeName = "Spade",
-                shapeIcon = "♠",
+                shapeIcon = "🍔",
                 effectNameRef = "Normal"
                 },
               candyEffect = normalEffect },
               Candy { candyDef = CandyDefinition {
                 shapeName = "Heart",
-                shapeIcon = "♥",
+                shapeIcon = "💖",
                 effectNameRef = "Normal"
                 },
                 candyEffect = normalEffect },
               Candy {candyDef = CandyDefinition {
                 shapeName = "Club",
-                shapeIcon = "♣",
+                shapeIcon = "🥞",
                 effectNameRef = "Normal"
                 },
                 candyEffect = normalEffect },
               Candy { candyDef = CandyDefinition {
                 shapeName = "Star",
-                shapeIcon = "★",
+                shapeIcon = "⭐️",
                 effectNameRef = "Normal"
                 },
                 candyEffect = normalEffect },
               Candy { candyDef = CandyDefinition {
                 shapeName = "Circle",
-                shapeIcon = "●",
+                shapeIcon = "🍩",
                 effectNameRef = "CircleBomb"
                 },
               candyEffect = Effect {
@@ -115,7 +115,7 @@ hard = Difficulty {
               } },
               Candy { candyDef = CandyDefinition {
                 shapeName = "Diamond",
-                shapeIcon = "♦",
+                shapeIcon = "💠",
                 effectNameRef = "DiamondBomb"
                 },
               candyEffect = Effect {
@@ -126,7 +126,7 @@ hard = Difficulty {
               } },
               Candy { candyDef = CandyDefinition {
                 shapeName = "Asterisk",
-                shapeIcon = "*",
+                shapeIcon = "🍬",
                 effectNameRef = "Bomb"
                 },
               candyEffect = Effect {
@@ -137,7 +137,7 @@ hard = Difficulty {
               } },
               Candy { candyDef = CandyDefinition {
                 shapeName = "Cross",
-                shapeIcon = "✚",
+                shapeIcon = "☩",
                 effectNameRef = "StripedCross"
                 },
               candyEffect = Effect {
@@ -148,7 +148,7 @@ hard = Difficulty {
               } },
               Candy { candyDef = CandyDefinition {
                 shapeName = "Minus",
-                shapeIcon = "-",
+                shapeIcon = "🍭",
                 effectNameRef = "StripedRow"
               }, candyEffect = Effect {
                 effectName = "StripedRow",
@@ -256,11 +256,13 @@ undoable = gets (isJust . lastGrid)
 printGrid :: GameGrid -> IO ()
 printGrid (GameGrid board _ _) = do
     let dim = length board
-    putStrLn $ "  " ++ unwords (map show [0..(dim - 1)]) -- print column numbers
+    putStrLn $ "   " ++ unwords (map rowNumToEmoji [0..(dim - 1)]) -- print column numbers
     zipWithM_ printRow [0..] board  -- print each row with row numbers
   where
     printRow :: Int -> [Candy] -> IO ()
-    printRow rowNum row = putStrLn $ show rowNum ++ " " ++ unwords (map candyToSymbol row)
+    printRow rowNum row = do
+        let rowEmoji = rowNumToEmoji rowNum
+        putStrLn $ rowEmoji ++ " " ++ unwords (map candyToSymbol row)
 
 printStateGrid :: GameState -> IO ()
 printStateGrid(GameState { currentGrid = grid }) = printGrid grid
