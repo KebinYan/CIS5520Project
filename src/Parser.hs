@@ -5,7 +5,7 @@
 -- exported by this file, as well as the `Functor`, `Applicative` and
 -- `Alternative` operations.
 module Parser(Parser, doParse, wsP,
-              get, eof, filter,
+              eof, filter,
               parse, parseFromFile, ParseError,
               satisfy, alpha, digit, upper, lower, space,
               char, string, intP,

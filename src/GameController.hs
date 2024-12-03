@@ -141,21 +141,21 @@ handleAction verbose state action = case action of
         newGrid <- applySwap (currentGrid state)
             (Coordinate x1, Coordinate y1)
             (Coordinate x2, Coordinate y2)
-        (_, newState) <- runStateT (updateGridState newGrid) state
-        when verbose $ printGrid newGrid
-        return newState
+        execStateT (do
+            updateGridState newGrid
+            when verbose $ liftIO $ printGrid newGrid
+            ) state
     Click (x, y) -> do
         when verbose $
             putStrLn $ "Clicking on (" ++ show x ++ "," ++ show y ++ ")"
         newGrid <- applyClick (currentGrid state) (x, y)
-        (_, newState) <- runStateT (updateGridState newGrid) state
-        when verbose $ printGrid newGrid
-        return newState
+        execStateT (do
+            updateGridState newGrid
+            when verbose $ liftIO $ printGrid newGrid
+            ) state
     Undo -> do
-        when verbose $ putStrLn "Undoing last action"
-        (_, newState) <- runStateT undoStep state
-        when verbose $ printGrid (currentGrid state)
-        return newState
+        when verbose $ putStrLn "Undosing last action"
+        execStateT undoStep state
     _ -> do
         when verbose $ putStrLn "Invalid action"
         return state
