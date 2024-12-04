@@ -1,6 +1,6 @@
 module CandyCrushParserTest where
 import CandyCrushParser
-import Candy
+import Phd
 import Test.HUnit
 import Data.Map (empty)
 import Data.Map qualified as Map

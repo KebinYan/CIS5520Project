@@ -2,12 +2,10 @@ module GameState where
 import Phd
 import Control.Monad
 import Control.Monad.State
-import CandyCrushParser
 import GameUtils
 import qualified Data.List as List
-import System.Random as Random
 import Data.Maybe
-import Data.Map (Map, update, fromList, elems)
+import Data.Map (Map, update, elems)
 import Text.Printf (printf)
 
 -- Initialize the grid based on difficulty

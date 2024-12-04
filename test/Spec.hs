@@ -1,7 +1,6 @@
 import Test.HUnit
 import Test.QuickCheck
 
-import Lib
 import CandyTest
 import GameStateTest
 import GameUtilsTest

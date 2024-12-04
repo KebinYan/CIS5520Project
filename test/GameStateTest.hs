@@ -5,7 +5,7 @@ import Test.QuickCheck
 import Test.QuickCheck.Monadic
 import TestUtils
 import GameState
-import Candy
+import Phd
 import Control.Monad (liftM2)
 import Control.Monad.State
 

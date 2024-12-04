@@ -7,8 +7,7 @@ import Data.List
 import Data.Maybe
 
 import GameUtils
-import GameState
-import Candy
+import Phd
 
 -- Unit test for generateRandomCandy
 testGenerateRandomCandy :: Test

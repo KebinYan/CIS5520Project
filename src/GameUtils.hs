@@ -1,4 +1,5 @@
 module GameUtils where
+
 import Phd
 import GHC.Base (error)
 import System.Random

@@ -5,8 +5,7 @@ import Test.HUnit
 import TestUtils
 
 import GameController
-import GameState
-import Candy
+import Phd
 import qualified Data.Set as Set
 import Data.List (sort)
 import Data.Sequence (Seq(Empty))
@@ -24,18 +23,9 @@ testConstructDisappear = TestCase $ do
              (Coordinate 1, Coordinate 3)]
     assertEqual "Disappear should be equal" expectedDisappear disappear
 
--- Test constructActionResult: Actions should be sorted
--- testConstructActionResult :: Test
--- testConstructActionResult = TestCase $ do
---     let actionResults = constructActionResult crushableGrid
---             [Quit, Click (2, 1), Disappear [(0, 0), (0, 1), (0, 2)], Trigger ((2, 2), candy5)]
---         expectedActions = [Quit, Click (2, 1), Disappear [(0, 0), (0, 1), (0, 2)], Trigger ((2, 2), candy5)]
---     assertEqual "ActionResults should be equal" expectedActions (actions actionResults)
-
 testConstructors :: Test
 testConstructors = TestList [
     TestLabel "constructDisappear" testConstructDisappear
-    -- TestLabel "constructActionResult" testConstructActionResult
   ]
 
 -- Test Action Parser
