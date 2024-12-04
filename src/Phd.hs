@@ -171,6 +171,7 @@ data Action = Swap CoordinatePair CoordinatePair
             | Hint
             | Undo
             | Quit
+            | Cheat CoordinatePair Candy -- for cheating
             | Trigger (CoordinatePair, Candy)
             | Disappear [CoordinatePair]
     deriving (Show)
@@ -186,6 +187,7 @@ instance Eq Action where
         c1 == c2 && candy1 == candy2
     (Disappear cs1) == (Disappear cs2) =
         all (`elem` cs2) cs1 && length cs1 == length cs2
+    (Cheat c1 candy1) == (Cheat c2 candy2) = c1 == c2 && candy1 == candy2
     _ == _ = False
 
 -- Constructor for Disappear action that sorts the coordinates
@@ -201,6 +203,7 @@ instance Ord Action where
     compare Quit _ = LT
     compare Undo _ = LT
     compare Hint _ = LT
+    compare (Cheat _ _) _ = LT
     compare (Swap _ _) _ = LT
     compare (Click _) _ = LT
     compare (Disappear cs1) (Disappear cs2) =
@@ -208,3 +211,4 @@ instance Ord Action where
     compare (Disappear _) _ = LT
     compare (Trigger (c1, _)) (Trigger (c2, _)) = compare c1 c2
     compare (Trigger _) _ = LT
+    

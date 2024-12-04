@@ -471,43 +471,43 @@ testEffectDescriptionP = TestList
   ]
 
   -- 定义标准测试数据
-testNormalEffectInput :: String
-testNormalEffectInput = "effect_name: Normal\n\
+normalEffectInput1 :: String
+normalEffectInput1 = "effect_name: Normal\n\
                         \effect_range: Arbitrary [(0,0)]\n\
                         \effect_requirement: =0\n\
                         \effect_description: some str..\n"
 
-testStripedRowEffectInput :: String
-testStripedRowEffectInput = "effect_name: StripedRow\n\
+stripedRowEffectStr :: String
+stripedRowEffectStr = "effect_name: StripedRow\n\
                             \effect_range: Arbitrary [(:,0)]\n\
                             \effect_requirement: >0\n\
                             \effect_description: some str..\n"
 
-testWrappedEffectInput :: String
-testWrappedEffectInput = "effect_name: Wrapped\n\
+wrappedEffectStr :: String
+wrappedEffectStr = "effect_name: Wrapped\n\
                          \effect_range: Circle 3\n\
                          \effect_requirement: >=0\n\
                          \effect_description: some str..\n"
 
--- 构造对应的标准 Effect
-testNormalEffect :: Effect
-testNormalEffect = Effect
+-- define the test data
+normalEffect1 :: Effect
+normalEffect1 = Effect
     { effectName = "Normal"
     , effectRange = Arbitrary [(Coordinate 0, Coordinate 0)]
     , effectRequirement = EffectRequirement Eq 0
     , effectDescription = "some str.."
     }
 
-testStripedRowEffect :: Effect
-testStripedRowEffect = Effect
+stripedRowEffect1 :: Effect
+stripedRowEffect1 = Effect
     { effectName = "StripedRow"
     , effectRange = Arbitrary [(All, Coordinate 0)]
     , effectRequirement = EffectRequirement Gt 0
     , effectDescription = "some str.."
     }
 
-testWrappedEffect :: Effect
-testWrappedEffect = Effect
+wrappedEffect1 :: Effect
+wrappedEffect1 = Effect
     { effectName = "Wrapped"
     , effectRange = Circle 3
     , effectRequirement = EffectRequirement Ge 0
@@ -515,54 +515,57 @@ testWrappedEffect = Effect
     }
 testValidEffectP :: Test
 testValidEffectP = TestList
-  [ "Valid Normal effect" ~:
-      doParse effectP (ParseState testNormalEffectInput 1 emptyDifficulty)
-      ~?= Right ((), ParseState "" 5 emptyDifficulty
-                    { effectMap = Map.fromList [("Normal", testNormalEffect)] })
-  , "Valid StripedRow effect" ~:
-      doParse effectP (ParseState testStripedRowEffectInput 1 emptyDifficulty)
-      ~?= Right ((), ParseState "" 5 emptyDifficulty
-                    { effectMap = Map.fromList [("StripedRow", testStripedRowEffect)] })
-  , "Valid Wrapped effect" ~:
-      doParse effectP (ParseState testWrappedEffectInput 1 emptyDifficulty)
-      ~?= Right ((), ParseState "" 5 emptyDifficulty
-                    { effectMap = Map.fromList [("Wrapped", testWrappedEffect)] })
+    [ "Valid Normal effect" ~:
+        doParse effectP (ParseState normalEffectInput1 1 emptyDifficulty)
+        ~?= Right ((), ParseState "" 5 emptyDifficulty
+                                    { effectMap = Map.insert "Normal" 
+                                    normalEffect1 (effectMap emptyDifficulty) })
+    , "Valid StripedRow effect" ~:
+            doParse effectP (ParseState stripedRowEffectStr 1 emptyDifficulty)
+            ~?= Right ((), ParseState "" 5 emptyDifficulty
+                                    { effectMap = Map.insert "StripedRow" 
+                                    stripedRowEffect1 (effectMap emptyDifficulty) })
+    , "Valid Wrapped effect" ~:
+            doParse effectP (ParseState wrappedEffectStr 1 emptyDifficulty)
+            ~?= Right ((), ParseState "" 5 emptyDifficulty
+                                    { effectMap = Map.insert "Wrapped" 
+                                    wrappedEffect1 (effectMap emptyDifficulty) })
   ]
 testValidEffectsP :: Test
 testValidEffectsP = TestList
   [ "Valid effects definition" ~:
-      doParse effectsP (ParseState (testNormalEffectInput ++ "\n" ++ "\n"
-                                    ++ testStripedRowEffectInput) 1 emptyDifficulty)
+      doParse effectsP (ParseState (normalEffectInput1 ++ "\n" ++ "\n"
+                                    ++ stripedRowEffectStr) 1 emptyDifficulty)
       ~?= Right ((), ParseState "" 11 emptyDifficulty
                     { effectMap = Map.fromList
-                        [ ("Normal", testNormalEffect)
-                        , ("StripedRow", testStripedRowEffect)
+                        [ ("Normal", normalEffect1)
+                        , ("StripedRow", stripedRowEffect1)
                         ]
                     })
   , "Valid effects with comments and empty lines" ~:
-      doParse effectsP (ParseState ("// Comment\n" ++ testNormalEffectInput
-                                    ++ "\n\n" ++ testStripedRowEffectInput
-                                    ++ "\n//another comment\n" ++ testWrappedEffectInput) 1 emptyDifficulty)
+      doParse effectsP (ParseState ("// Comment\n" ++ normalEffectInput1
+                                    ++ "\n\n" ++ stripedRowEffectStr
+                                    ++ "\n//another comment\n" ++ wrappedEffectStr) 1 emptyDifficulty)
       ~?= Right ((), ParseState "" 18 emptyDifficulty
                     { effectMap = Map.fromList
-                        [ ("Normal", testNormalEffect)
-                        , ("StripedRow", testStripedRowEffect)
-                        , ("Wrapped", testWrappedEffect)
+                        [ ("Normal", normalEffect1)
+                        , ("StripedRow", stripedRowEffect1)
+                        , ("Wrapped", wrappedEffect1)
                         ]
                     })
     , "Valid effects without empty lines" ~:
-        doParse effectsP (ParseState (testNormalEffectInput ++ testStripedRowEffectInput
-                                      ++ testWrappedEffectInput) 1 emptyDifficulty)
+        doParse effectsP (ParseState (normalEffectInput1 ++ stripedRowEffectStr
+                                      ++ wrappedEffectStr) 1 emptyDifficulty)
         ~?= Right ((), ParseState "" 13 emptyDifficulty
                       { effectMap = Map.fromList
-                          [ ("Normal", testNormalEffect)
-                          , ("StripedRow", testStripedRowEffect)
-                          , ("Wrapped", testWrappedEffect)
+                          [ ("Normal", normalEffect1)
+                          , ("StripedRow", stripedRowEffect1)
+                          , ("Wrapped", wrappedEffect1)
                           ]
                       })
     , "Valid update for duplicate effect names" ~:
-        doParse effectsP (ParseState (testNormalEffectInput
-                                      ++ testWrappedEffectInput
+        doParse effectsP (ParseState (normalEffectInput1
+                                      ++ wrappedEffectStr
                                       ++ "effect_name: Normal\n\
                                         \effect_range: Rectangle 3 3\n\
                                         \effect_requirement: =0\n\
@@ -576,7 +579,7 @@ testValidEffectsP = TestList
                                 , effectRequirement = EffectRequirement Eq 0
                                 , effectDescription = "some str.."
                                 })
-                            , ("Wrapped", testWrappedEffect)
+                            , ("Wrapped", wrappedEffect1)
                             ]
                         })
   ]
@@ -784,11 +787,11 @@ invalidSequenceInput =
   \difficulty_constant\n\
   \max_steps: 10\n\
   \dimension: 3\n"
--- 测试用例
+-- Test cases for difficultyConstantP
 testDifficultyConstantP :: Test
 testDifficultyConstantP = TestList
   [ "Valid input" ~: doParse difficultyConstantP (ParseState validConstantInput 1 emptyDifficulty)
-        ~?= Right ((), ParseState "" 8 (Difficulty 5 Map.empty Map.empty 10))
+        ~?= Right ((), ParseState "" 8 emptyDifficulty { dimension = 5, maxSteps = 10 })
     , "Invalid dimension tag" ~: assertIsFatalError
         (doParse difficultyConstantP (ParseState invalidDimensionTag 1 emptyDifficulty))
         "Expected an error for invalid dimension tag"
