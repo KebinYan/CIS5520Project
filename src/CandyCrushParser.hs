@@ -8,7 +8,7 @@ import Text.Read (readMaybe)
 import Test.QuickCheck qualified as QC
 import Prelude hiding (filter)
 import Data.Set (Set)
-import Data.Map (Map)
+import Data.Map (Map, lookup)
 import qualified Data.Set as Set
 import qualified Data.Map as Map
 import qualified Prelude as P
@@ -489,15 +489,19 @@ actionIntP dim errorMessage = do
         then failError errorMessage
         else return coord
 
-parseAction :: Int -> String -> Either ParseError Action
-parseAction dim input = doParse (actionParser dim) (ParseState input 1 emptyDifficulty) >>= \(action, _) -> Right action
+parseAction :: Difficulty -> String -> Either ParseError Action
+parseAction difficulty input = doParse (actionParser difficulty) 
+                              (ParseState input 1 emptyDifficulty) >>=
+                                 \(action, _) -> Right action
 
-actionParser :: Int -> Parser Action
-actionParser dim = wsP $
-    parseSwap dim <|> 
-    parseClick dim <|> 
-    parseConstantAction "undo" Undo <|> 
-    parseConstantAction "quit" Quit <|> 
+-- Modify actionParser to include difficulty for parsing Cheat
+actionParser :: Difficulty -> Parser Action
+actionParser difficulty = wsP $
+    parseSwap  (dimension difficulty) <|>
+    parseClick (dimension difficulty)<|>
+    parseCheat difficulty <|>
+    parseConstantAction "undo" Undo <|>
+    parseConstantAction "quit" Quit <|>
     parseConstantAction "hint" Hint
 
 -- parse "swap" action
@@ -521,6 +525,18 @@ parseClick dim = do
 -- parse constant actions
 parseConstantAction :: String -> Action -> Parser Action
 parseConstantAction keyword action = stringP keyword *> pure action
+
+-- parse "cheat" action
+parseCheat :: Difficulty -> Parser Action
+parseCheat difficulty = do
+    stringP "cheat"
+    let dim = dimension difficulty
+    x <- actionIntP dim "x must be within the grid and non-negative"
+    y <- actionIntP dim "y must be within the grid and non-negative"
+    candyName <- stripP (some (satisfy (/= '\n')))
+    case Data.Map.lookup candyName (candyMap difficulty) of
+        Just candy -> return $ Cheat (Coordinate x, Coordinate y) candy
+        Nothing -> fatalError $ "Candy '" ++ candyName ++ "' does not exist."
 
 {---------------------------- Input Parse ------------------------------}
 -- Custom input function supporting backspace
@@ -562,10 +578,10 @@ parseFile filename = do
   return $ either
     (Left . (\e -> FatalError ("Error reading `" ++ filename ++ "`: " ++ show e) 0))
     parseAndValidate contentResult
-    
+
 -- | Parse and validate the content of a file
 parseAndValidate :: String -> Either ParseError Difficulty
-parseAndValidate content = 
+parseAndValidate content =
   case fileP content of
     Left err -> Left err
     Right difficulty -> case validateDifficulty difficulty of
@@ -574,7 +590,7 @@ parseAndValidate content =
 
 validateDifficulty :: Difficulty -> Either String Difficulty
 validateDifficulty (Difficulty dimension candyMap _ maxSteps)
-  | dimension <= 0 = Left "Dimension must be greater than 0" 
+  | dimension <= 0 = Left "Dimension must be greater than 0"
   | maxSteps < 3 = Left "maxSteps must be at least 3"
   | Map.size candyMap < 3 = Left "candyMap must contain at least 3 candies"
   | otherwise = Right (Difficulty dimension candyMap Map.empty maxSteps)

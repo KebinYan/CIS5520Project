@@ -11,7 +11,7 @@ main = do
     putStrLn "(Default is 'config/hard', press Enter to use the default)"
     input <- candyGetLine
     let fileName = if null input
-                   then "config/hard"  -- Default configuration
+                   then "config/hard"  -- default configuration
                    else case input of
                         "easy"   -> "config/easy"
                         "medium" -> "config/medium"

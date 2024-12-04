@@ -7,7 +7,7 @@ import Control.Monad.State
 import System.IO (hFlush, stdout)
 import Data.Maybe
 import Data.List
-import Data.Map (Map)
+import Data.Map (Map,lookup)
 import qualified Data.Set as Set
 import Control.Applicative
 import Control.Monad.IO.Class
@@ -44,8 +44,8 @@ gameStep state = do
     hFlush stdout
 
     input <- candyGetLine
-    let dim = dimension (difficulty state)
-    case parseAction dim input of
+    let diffculty = difficulty state
+    case parseAction diffculty input of
         Right action ->
             case action of
                 Quit -> putStrLn "Quitting game"
@@ -78,6 +78,14 @@ handleAction verbose state action = case action of
             updateGridState newGrid
             when verbose $ liftIO $ printGrid newGrid
             ) state
+    Cheat (Coordinate x, Coordinate y) candy -> do
+        when verbose $
+            putStrLn $
+                "Cheating at (" ++ show x ++ "," ++ show y ++ ") with candy '"
+                ++ shapeName (candyDef candy) ++ "'"
+        newGrid <- applyCheat (currentGrid state)
+            (Coordinate x, Coordinate y) candy
+        execStateT (do updateGridState newGrid) state
     Click (x, y) -> do
         when verbose $
             putStrLn $ "Clicking on (" ++ show x ++ "," ++ show y ++ ")"
@@ -93,8 +101,15 @@ handleAction verbose state action = case action of
         when verbose $ putStrLn "Invalid action"
         return state
 
+applyCheat :: GameGrid -> CoordinatePair -> Candy -> IO GameGrid
+applyCheat grid coord candy = do
+    let newBoard = setCandyAt (board grid) coord candy
+    let newGrid = grid { board = newBoard }
+    return newGrid
+            
 applyAction :: GameGrid -> Action -> IO GameGrid
 applyAction g (Disappear coords) = applyDisappear g coords
+applyAction g (Cheat coord candy) = applyCheat g coord candy
 applyAction g (Trigger (coordinate, candy)) =
     applyTrigger g coordinate candy
 applyAction g (Swap (x1, y1) (x2, y2)) = applySwap g (x1, y1) (x2, y2)
