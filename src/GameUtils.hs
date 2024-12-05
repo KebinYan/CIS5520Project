@@ -1,7 +1,7 @@
 module GameUtils where
 
 import Phd
-import GHC.Base (error)
+import GeneralStateParser
 import System.Random
 import Control.Monad (replicateM)
 import Data.Map (Map, insertWith, empty, lookup)
@@ -134,7 +134,7 @@ setCandyAt board _ _ = board
 
 -- Extract normal candies from a candies list
 extractNormalCandies :: [Candy] -> [Candy]
-extractNormalCandies = filter (\candy ->
+extractNormalCandies = Prelude.filter (\candy ->
     effectName (candyEffect candy) == "Normal")
 
 -- Extract special candies from a candies list

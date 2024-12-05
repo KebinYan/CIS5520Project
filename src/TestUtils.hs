@@ -4,8 +4,8 @@ module TestUtils where
 import Test.QuickCheck
 
 import Phd
-import CandyCrushParser
 import GeneralStateParser
+import CandyCrushParser
 import qualified Data.Map as Map
 import Control.Monad
 import System.IO.Unsafe (unsafePerformIO)

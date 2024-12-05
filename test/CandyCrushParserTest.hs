@@ -1,6 +1,8 @@
 module CandyCrushParserTest where
 import CandyCrushParser
+import GeneralStateParser
 import Phd
+import TestUtils
 import Test.HUnit
 import Data.Map (empty)
 import Data.Map qualified as Map
@@ -34,24 +36,24 @@ assertIsFailError result errMsg =
 testIntP :: Test
 testIntP = TestList
   [ "Valid positive integer" ~: TestCase $ assertIsSuccess
-        (doParse intP (ParseState "123 abc" 1 emptyDifficulty))
-        (123, ParseState " abc" 1 emptyDifficulty)
+        (doParse intP (CandyFileParser "123 abc" 1 emptyDifficulty))
+        (123, CandyFileParser " abc" 1 emptyDifficulty)
         "Expected to parse a valid positive integer"
   , "Valid negative integer" ~:TestCase $ assertIsSuccess
-        (doParse intP (ParseState "-456 xyz" 1 emptyDifficulty))
-        (-456, ParseState " xyz" 1 emptyDifficulty)
+        (doParse intP (CandyFileParser "-456 xyz" 1 emptyDifficulty))
+        (-456, CandyFileParser " xyz" 1 emptyDifficulty)
         "Expected to parse a valid negative integer"
   , "Empty input" ~: assertIsFatalError
-        (doParse intP (ParseState "" 1 emptyDifficulty))
+        (doParse intP (CandyFileParser "" 1 emptyDifficulty))
         "Expected an error for empty input"
   , "Invalid integer with only '-'" ~: assertIsFatalError
-        (doParse intP (ParseState "- xyz" 1 emptyDifficulty))
+        (doParse intP (CandyFileParser "- xyz" 1 emptyDifficulty))
         "Expected an error for invalid '-' input"
   , "Trailing invalid characters" ~: assertIsFatalError
-        (doParse intP (ParseState "123.45 xyz" 1 emptyDifficulty))
+        (doParse intP (CandyFileParser "123.45 xyz" 1 emptyDifficulty))
         "Expected an error for trailing invalid characters"
   , "Extra characters" ~: assertIsFatalError
-        (doParse intP (ParseState "123abc" 1 emptyDifficulty))
+        (doParse intP (CandyFileParser "123abc" 1 emptyDifficulty))
         "Expected to stop parsing at the first invalid character"
   ]
 
@@ -59,15 +61,15 @@ testBetween :: Test
 testBetween = TestList [
     "Between parentheses" ~:
         doParse (between (stringP "(") (string "content") (stringP ")"))
-        (ParseState "(content)" 1 emptyDifficulty)
-        ~?= Right ("content", ParseState "" 1 emptyDifficulty),
+        (CandyFileParser "(content)" 1 emptyDifficulty)
+        ~?= Right ("content", CandyFileParser "" 1 emptyDifficulty),
     "Between brackets with space" ~:
         doParse (between (stringP "[") (string "content") (stringP "]"))
-        (ParseState "[ content ]" 1 emptyDifficulty)
-        ~?= Right ("content", ParseState "" 1 emptyDifficulty),
+        (CandyFileParser "[ content ]" 1 emptyDifficulty)
+        ~?= Right ("content", CandyFileParser "" 1 emptyDifficulty),
     "inalid between mismatched brackets" ~:
         TestCase $ case doParse (between (stringP "[") (string "content") (stringP "]"))
-                (ParseState "[content)" 1 emptyDifficulty) of
+                (CandyFileParser "[content)" 1 emptyDifficulty) of
             Left (FailError _ _) -> return ()
             _                  -> assertFailure "Expected a FailError for mismatched brackets"
     ]
@@ -75,31 +77,31 @@ testSepBy :: Test
 testSepBy = TestList [
     "Comma-separated values" ~:
         doParse (sepBy (string "item") (stringP ","))
-        (ParseState "item,item,item" 1 emptyDifficulty)
-        ~?= Right (["item", "item", "item"], ParseState "" 1 emptyDifficulty),
+        (CandyFileParser "item,item,item" 1 emptyDifficulty)
+        ~?= Right (["item", "item", "item"], CandyFileParser "" 1 emptyDifficulty),
     "Single item" ~:
         doParse (sepBy (string "item") (stringP ","))
-        (ParseState "item" 1 emptyDifficulty)
-        ~?= Right (["item"], ParseState "" 1 emptyDifficulty),
+        (CandyFileParser "item" 1 emptyDifficulty)
+        ~?= Right (["item"], CandyFileParser "" 1 emptyDifficulty),
     "Empty list" ~:
         doParse (sepBy (string "item") (stringP ","))
-        (ParseState "" 1 emptyDifficulty)
-        ~?= Right ([], ParseState "" 1 emptyDifficulty)
+        (CandyFileParser "" 1 emptyDifficulty)
+        ~?= Right ([], CandyFileParser "" 1 emptyDifficulty)
     ]
 
 testSepBy1 :: Test
 testSepBy1 = TestList [
     "Comma-separated values" ~:
         doParse (sepBy1 (string "item") (stringP ","))
-        (ParseState "item,item,item" 1 emptyDifficulty)
-        ~?= Right (["item", "item", "item"], ParseState "" 1 emptyDifficulty),
+        (CandyFileParser "item,item,item" 1 emptyDifficulty)
+        ~?= Right (["item", "item", "item"], CandyFileParser "" 1 emptyDifficulty),
     "Single item" ~:
         doParse (sepBy1 (string "item") (stringP ","))
-        (ParseState "item" 1 emptyDifficulty)
-        ~?= Right (["item"], ParseState "" 1 emptyDifficulty),
+        (CandyFileParser "item" 1 emptyDifficulty)
+        ~?= Right (["item"], CandyFileParser "" 1 emptyDifficulty),
     "Empty list" ~:
         TestCase $ case doParse (sepBy1 (string "item") (stringP ","))
-                (ParseState "" 1 emptyDifficulty) of
+                (CandyFileParser "" 1 emptyDifficulty) of
             Left (FailError _ _) -> return ()
             _                  -> assertFailure "Expected a FailError for an empty list"
     ]
@@ -108,11 +110,11 @@ testBrackets :: Test
 testBrackets = TestList [
     "Value inside brackets" ~:
         doParse (brackets (string "inner"))
-        (ParseState "[inner]" 1 emptyDifficulty)
-        ~?= Right ("inner", ParseState "" 1 emptyDifficulty),
+        (CandyFileParser "[inner]" 1 emptyDifficulty)
+        ~?= Right ("inner", CandyFileParser "" 1 emptyDifficulty),
     "Mismatched brackets" ~:
         TestCase $ case doParse (brackets (string "inner"))
-                (ParseState "[inner)" 1 emptyDifficulty) of
+                (CandyFileParser "[inner)" 1 emptyDifficulty) of
             Left (FailError _ _) -> return ()
             _                  -> assertFailure "Expected a FailError for mismatched brackets"
     ]
@@ -121,11 +123,11 @@ testParens :: Test
 testParens = TestList [
     "Value inside parentheses" ~:
         doParse (parens (string "inner"))
-        (ParseState "(inner)" 1 emptyDifficulty)
-        ~?= Right ("inner", ParseState "" 1 emptyDifficulty),
+        (CandyFileParser "(inner)" 1 emptyDifficulty)
+        ~?= Right ("inner", CandyFileParser "" 1 emptyDifficulty),
     "Missing closing parenthesis" ~:
         TestCase $ case doParse (parens (string "inner"))
-                (ParseState "(inner" 1 emptyDifficulty) of
+                (CandyFileParser "(inner" 1 emptyDifficulty) of
             Left (FailError _ _) -> return ()
             _                  -> assertFailure "Expected a FailError for missing closing parenthesis"
     ]
@@ -134,11 +136,11 @@ testConstP :: Test
 testConstP = TestList [
     "Constant parsing with exact match (no trailing whitespaces)" ~:
         doParse (constP "constant" 42)
-        (ParseState "constant followed by text" 1 emptyDifficulty)
-        ~?= Right (42, ParseState "followed by text" 1 emptyDifficulty),
+        (CandyFileParser "constant followed by text" 1 emptyDifficulty)
+        ~?= Right (42, CandyFileParser "followed by text" 1 emptyDifficulty),
     "Mismatch for constant" ~:
         TestCase $ case doParse (constP "constant" 42)
-                (ParseState "wrong input" 1 emptyDifficulty) of
+                (CandyFileParser "wrong input" 1 emptyDifficulty) of
             Left (FailError _ _) -> return ()
             _                  -> assertFailure "Expected a FailError for mismatched constant"
     ]
@@ -148,19 +150,19 @@ testStripP = TestList
     [ "stripP" ~: do
         let input = "  hello \n "
         let expected = "hello"
-        let actual = doParse (stripP (pure input)) (ParseState "" 1 emptyDifficulty)
-        actual ~?= Right (expected, ParseState "" 1 emptyDifficulty)
+        let actual = doParse (stripP (pure input)) (CandyFileParser "" 1 emptyDifficulty)
+        actual ~?= Right (expected, CandyFileParser "" 1 emptyDifficulty)
     ]
 
 testString :: Test
 testString = TestList [
     "Exact match (no trailing whitespaces)" ~:
         doParse (string "hello")
-        (ParseState "hello world" 1 emptyDifficulty)
-        ~?= Right ("hello", ParseState " world" 1 emptyDifficulty),
+        (CandyFileParser "hello world" 1 emptyDifficulty)
+        ~?= Right ("hello", CandyFileParser " world" 1 emptyDifficulty),
     "Mismatch" ~:
         TestCase $ case doParse (string "hello")
-                (ParseState "hi world" 1 emptyDifficulty) of
+                (CandyFileParser "hi world" 1 emptyDifficulty) of
             Left (FailError _ _) -> return ()
             _                  -> assertFailure "Expected a FailError for mismatch"
     ]
@@ -169,11 +171,11 @@ testStringP :: Test
 testStringP = TestList [
     "Exact match with whitespace" ~:
         doParse (stringP "hello")
-        (ParseState "  hello  world" 1 emptyDifficulty)
-        ~?= Right ((), ParseState "world" 1 emptyDifficulty),
+        (CandyFileParser "  hello  world" 1 emptyDifficulty)
+        ~?= Right ((), CandyFileParser "world" 1 emptyDifficulty),
     "Mismatch" ~:
         TestCase $ case doParse (stringP "hello")
-                (ParseState "  hi world" 1 emptyDifficulty) of
+                (CandyFileParser "  hi world" 1 emptyDifficulty) of
             Left (FailError _ _) -> return ()
             _                  -> assertFailure "Expected a FailError for mismatch"
     ]
@@ -181,296 +183,296 @@ testStringP = TestList [
 testEmptyLine :: Test
 testEmptyLine = TestList
   [ "empty line should parse correctly" ~:
-      doParse emptyLine (ParseState "  \n" 1 emptyDifficulty)
-      ~?= Right ((), ParseState "" 2 emptyDifficulty)
+      doParse emptyLine (CandyFileParser "  \n" 1 emptyDifficulty)
+      ~?= Right ((), CandyFileParser "" 2 emptyDifficulty)
     , "parse one empty line a time 1" ~:
-      doParse emptyLine (ParseState "  \n  \n" 1 emptyDifficulty)
-      ~?= Right ((), ParseState "\n" 2 emptyDifficulty)
+      doParse emptyLine (CandyFileParser "  \n  \n" 1 emptyDifficulty)
+      ~?= Right ((), CandyFileParser "\n" 2 emptyDifficulty)
     , "parse one empty line a time 2" ~:
-    doParse emptyLine (ParseState "\n\n" 1 emptyDifficulty)
-      ~?= Right ((), ParseState "\n" 2 emptyDifficulty)
+    doParse emptyLine (CandyFileParser "\n\n" 1 emptyDifficulty)
+      ~?= Right ((), CandyFileParser "\n" 2 emptyDifficulty)
     , "no empty line should fail" ~: assertIsFailError
-        (doParse emptyLine (ParseState "This is not an empty line" 1 emptyDifficulty))
+        (doParse emptyLine (CandyFileParser "This is not an empty line" 1 emptyDifficulty))
         "Expected a fail error whe no empty line"
   ]
 testCommentLine :: Test
 testCommentLine = TestList
   [ "single-line comment should parse correctly" ~:
-      doParse commentLine (ParseState "// This is a comment\n" 1 emptyDifficulty)
-      ~?= Right ((), ParseState "" 2 emptyDifficulty)
+      doParse commentLine (CandyFileParser "// This is a comment\n" 1 emptyDifficulty)
+      ~?= Right ((), CandyFileParser "" 2 emptyDifficulty)
     , "parse one empty line a time" ~:
-    doParse commentLine (ParseState "// This is a comment\n// another comment\n" 1 emptyDifficulty)
-    ~?= Right ((), ParseState "// another comment\n" 2 emptyDifficulty)
+    doParse commentLine (CandyFileParser "// This is a comment\n// another comment\n" 1 emptyDifficulty)
+    ~?= Right ((), CandyFileParser "// another comment\n" 2 emptyDifficulty)
   , "non-comment line should fail" ~: assertIsFailError
-      (doParse commentLine (ParseState "This is not a comment" 1 emptyDifficulty))
+      (doParse commentLine (CandyFileParser "This is not a comment" 1 emptyDifficulty))
       "Expected a fail error when no comment line"
   ]
 testSkipCommentOrEmptyLines :: Test
 testSkipCommentOrEmptyLines = TestList
   [ "skip empty lines and comments" ~:
-      doParse skipCommentOrEmptyLines (ParseState "\n// comment\n\n// another comment\n" 1 emptyDifficulty)
-      ~?= Right ((), ParseState "" 5 emptyDifficulty)
+      doParse skipCommentOrEmptyLines (CandyFileParser "\n// comment\n\n// another comment\n" 1 emptyDifficulty)
+      ~?= Right ((), CandyFileParser "" 5 emptyDifficulty)
   , "skip empty lines and comment with non-empty content after" ~:
-      doParse skipCommentOrEmptyLines (ParseState "// comment\nSome content\n" 1 emptyDifficulty)
-      ~?= Right ((), ParseState "Some content\n" 2 emptyDifficulty)
+      doParse skipCommentOrEmptyLines (CandyFileParser "// comment\nSome content\n" 1 emptyDifficulty)
+      ~?= Right ((), CandyFileParser "Some content\n" 2 emptyDifficulty)
   , "skip comments and empty lines with content after" ~:
-      doParse skipCommentOrEmptyLines (ParseState "// comment\n\nSome content\n" 1 emptyDifficulty)
-      ~?= Right ((), ParseState "Some content\n" 3 emptyDifficulty)
+      doParse skipCommentOrEmptyLines (CandyFileParser "// comment\n\nSome content\n" 1 emptyDifficulty)
+      ~?= Right ((), CandyFileParser "Some content\n" 3 emptyDifficulty)
   , "should not skip non-comment or non-empty lines" ~:
-      doParse skipCommentOrEmptyLines (ParseState "Non-comment line" 1 emptyDifficulty)
-      ~?= Right ((), ParseState "Non-comment line" 1 emptyDifficulty)
+      doParse skipCommentOrEmptyLines (CandyFileParser "Non-comment line" 1 emptyDifficulty)
+      ~?= Right ((), CandyFileParser "Non-comment line" 1 emptyDifficulty)
   ]
 testCoordinateP :: Test
 testCoordinateP = TestList [
     "Specific Pos coordinate" ~: assertIsSuccess
-        (doParse coordinateP ( ParseState "5" 1 emptyDifficulty))
-        (Coordinate 5, ParseState "" 1 emptyDifficulty)
+        (doParse coordinateP ( CandyFileParser "5" 1 emptyDifficulty))
+        (Coordinate 5, CandyFileParser "" 1 emptyDifficulty)
         "Expected to parse a valid positive integer"
     , "Specific Neg coordinate" ~: assertIsSuccess
-        (doParse coordinateP ( ParseState "-5" 1 emptyDifficulty))
-        (Coordinate (-5), ParseState "" 1 emptyDifficulty)
+        (doParse coordinateP ( CandyFileParser "-5" 1 emptyDifficulty))
+        (Coordinate (-5), CandyFileParser "" 1 emptyDifficulty)
         "Expected to parse a valid negative integer"
     , "Wildcard coordinate" ~: assertIsSuccess
-        (doParse coordinateP ( ParseState ":" 1 emptyDifficulty))
-        (All, ParseState "" 1 emptyDifficulty)
+        (doParse coordinateP ( CandyFileParser ":" 1 emptyDifficulty))
+        (All, CandyFileParser "" 1 emptyDifficulty)
         "Expected to parse a wildcard coordinate"
     , "Invalid coordinate" ~: assertIsFatalError
-        (doParse coordinateP ( ParseState "abc" 1 emptyDifficulty))
+        (doParse coordinateP ( CandyFileParser "abc" 1 emptyDifficulty))
         "Expected a fatal error for invalid input"
     ]
 testCoordinatePairP :: Test
 testCoordinatePairP = TestList
     [
-        "Valid coordinate pair 1" ~: doParse coordinatePairP (ParseState "( -100 , 2 )" 1 emptyDifficulty)
-            ~?= Right ((Coordinate (-100), Coordinate 2), ParseState "" 1 emptyDifficulty)
-        ,"Valid coordinate pair 2" ~: doParse coordinatePairP (ParseState "(1,1)" 1 emptyDifficulty)
-            ~?= Right ((Coordinate 1, Coordinate 1), ParseState "" 1 emptyDifficulty)
-        ,"Valid coordinate pair 3" ~: doParse coordinatePairP (ParseState "(-1, 1000)" 1 emptyDifficulty)
-            ~?= Right ((Coordinate (-1), Coordinate 1000), ParseState "" 1 emptyDifficulty)
-        ,"Valid coordinate pair 4" ~: doParse coordinatePairP (ParseState "( 1000,-1)" 1 emptyDifficulty)
-            ~?= Right ((Coordinate 1000, Coordinate (-1)), ParseState "" 1 emptyDifficulty)
-         ,"Valid coordinate pair 5" ~: doParse coordinatePairP (ParseState "(-1,-1)" 1 emptyDifficulty)
-            ~?= Right ((Coordinate (-1), Coordinate (-1)), ParseState "" 1 emptyDifficulty)
-        , "Wildcard Pos Pair" ~: doParse coordinatePairP (ParseState "( 1  , :)" 1 emptyDifficulty)
-            ~?= Right ((Coordinate 1, All), ParseState "" 1 emptyDifficulty)
-        , "Wildcard Neg Pair" ~: doParse coordinatePairP (ParseState "( :, -2  )" 1 emptyDifficulty)
-            ~?= Right ((All, Coordinate (-2)), ParseState "" 1 emptyDifficulty)
-        , "Wildcard pair" ~: doParse coordinatePairP (ParseState "( : , : )" 1 emptyDifficulty)
-            ~?= Right ((All, All), ParseState "" 1 emptyDifficulty)
+        "Valid coordinate pair 1" ~: doParse coordinatePairP (CandyFileParser "( -100 , 2 )" 1 emptyDifficulty)
+            ~?= Right ((Coordinate (-100), Coordinate 2), CandyFileParser "" 1 emptyDifficulty)
+        ,"Valid coordinate pair 2" ~: doParse coordinatePairP (CandyFileParser "(1,1)" 1 emptyDifficulty)
+            ~?= Right ((Coordinate 1, Coordinate 1), CandyFileParser "" 1 emptyDifficulty)
+        ,"Valid coordinate pair 3" ~: doParse coordinatePairP (CandyFileParser "(-1, 1000)" 1 emptyDifficulty)
+            ~?= Right ((Coordinate (-1), Coordinate 1000), CandyFileParser "" 1 emptyDifficulty)
+        ,"Valid coordinate pair 4" ~: doParse coordinatePairP (CandyFileParser "( 1000,-1)" 1 emptyDifficulty)
+            ~?= Right ((Coordinate 1000, Coordinate (-1)), CandyFileParser "" 1 emptyDifficulty)
+         ,"Valid coordinate pair 5" ~: doParse coordinatePairP (CandyFileParser "(-1,-1)" 1 emptyDifficulty)
+            ~?= Right ((Coordinate (-1), Coordinate (-1)), CandyFileParser "" 1 emptyDifficulty)
+        , "Wildcard Pos Pair" ~: doParse coordinatePairP (CandyFileParser "( 1  , :)" 1 emptyDifficulty)
+            ~?= Right ((Coordinate 1, All), CandyFileParser "" 1 emptyDifficulty)
+        , "Wildcard Neg Pair" ~: doParse coordinatePairP (CandyFileParser "( :, -2  )" 1 emptyDifficulty)
+            ~?= Right ((All, Coordinate (-2)), CandyFileParser "" 1 emptyDifficulty)
+        , "Wildcard pair" ~: doParse coordinatePairP (CandyFileParser "( : , : )" 1 emptyDifficulty)
+            ~?= Right ((All, All), CandyFileParser "" 1 emptyDifficulty)
         , "Invalid coordinate pair 1" ~: assertIsFatalError
-            (doParse coordinatePairP (ParseState "(1, abc)" 1 emptyDifficulty))
+            (doParse coordinatePairP (CandyFileParser "(1, abc)" 1 emptyDifficulty))
             "Expected a fatal error for invalid input"
-        ,  "Valid brackets with single pair" ~: doParse coordinateListP (ParseState "[(1,2)]" 1 emptyDifficulty)
-            ~?= Right ([(Coordinate 1, Coordinate 2)], ParseState "" 1 emptyDifficulty)
-        ,  "Valid brackets with multiple pairs" ~: doParse coordinateListP (ParseState "[(1,2),(3,4)]" 1 emptyDifficulty)
-            ~?= Right ([(Coordinate 1, Coordinate 2), (Coordinate 3, Coordinate 4)], ParseState "" 1 emptyDifficulty)
+        ,  "Valid brackets with single pair" ~: doParse coordinateListP (CandyFileParser "[(1,2)]" 1 emptyDifficulty)
+            ~?= Right ([(Coordinate 1, Coordinate 2)], CandyFileParser "" 1 emptyDifficulty)
+        ,  "Valid brackets with multiple pairs" ~: doParse coordinateListP (CandyFileParser "[(1,2),(3,4)]" 1 emptyDifficulty)
+            ~?= Right ([(Coordinate 1, Coordinate 2), (Coordinate 3, Coordinate 4)], CandyFileParser "" 1 emptyDifficulty)
         , "Empty brackets" ~:
-            doParse coordinateListP (ParseState "[]" 1 emptyDifficulty)
-            ~?= Right ([], ParseState "" 1 emptyDifficulty)
+            doParse coordinateListP (CandyFileParser "[]" 1 emptyDifficulty)
+            ~?= Right ([], CandyFileParser "" 1 emptyDifficulty)
         , "testCoordinatePairP Missing closing bracket" ~: assertIsFailError
-            (doParse coordinateListP (ParseState "[(1,2),(3,4)" 1 emptyDifficulty))
+            (doParse coordinateListP (CandyFileParser "[(1,2),(3,4)" 1 emptyDifficulty))
             "Expected a fatal error for missing closing bracket"
         , "Invalid coordinate pair 2" ~: assertIsFailError
-            (doParse coordinateListP (ParseState "[(1,2),(3)]" 1 emptyDifficulty))
+            (doParse coordinateListP (CandyFileParser "[(1,2),(3)]" 1 emptyDifficulty))
             "Expected a fatal error for invalid coordinate pair"
     ]
 testArbitraryPIgnoreCase :: Test
 testArbitraryPIgnoreCase = TestList
     [ "Arbitrary with single coordinate pair" ~:
-        doParse arbitraryP (ParseState "Arbitrary [(1,2)]" 1 emptyDifficulty)
-        ~?= Right (Arbitrary [(Coordinate 1, Coordinate 2)], ParseState "" 1 emptyDifficulty)
+        doParse arbitraryP (CandyFileParser "Arbitrary [(1,2)]" 1 emptyDifficulty)
+        ~?= Right (Arbitrary [(Coordinate 1, Coordinate 2)], CandyFileParser "" 1 emptyDifficulty)
     , "Arbitrary with wildcard coordinates" ~:
-        doParse arbitraryP (ParseState "Arbitrary [(0,:)]" 1 emptyDifficulty)
-        ~?= Right (Arbitrary [(Coordinate 0, All)], ParseState "" 1 emptyDifficulty)
+        doParse arbitraryP (CandyFileParser "Arbitrary [(0,:)]" 1 emptyDifficulty)
+        ~?= Right (Arbitrary [(Coordinate 0, All)], CandyFileParser "" 1 emptyDifficulty)
     , "Arbitrary with multiple coordinate pairs" ~:
-        doParse arbitraryP (ParseState "Arbitrary [(1,2),(:,:),(-2,12)]" 1 emptyDifficulty)
-        ~?= Right (Arbitrary [(Coordinate 1, Coordinate 2), (All, All), (Coordinate (-2), Coordinate 12)], ParseState "" 1 emptyDifficulty)
+        doParse arbitraryP (CandyFileParser "Arbitrary [(1,2),(:,:),(-2,12)]" 1 emptyDifficulty)
+        ~?= Right (Arbitrary [(Coordinate 1, Coordinate 2), (All, All), (Coordinate (-2), Coordinate 12)], CandyFileParser "" 1 emptyDifficulty)
     , "testArbitraryPIgnoreCase Arbitrary with missing closing bracket" ~: assertIsFatalError
-        (doParse arbitraryP (ParseState "Arbitrary [(1,2),(:,:),(-2,12)" 1 emptyDifficulty))
+        (doParse arbitraryP (CandyFileParser "Arbitrary [(1,2),(:,:),(-2,12)" 1 emptyDifficulty))
         "Expected a fatal error for missing closing bracket"
     , "Arbitrary with invalid coordinate tuple" ~: assertIsFatalError
-        (doParse arbitraryP (ParseState "Arbitrary [(1,2),(1,2,3)]" 1 emptyDifficulty))
+        (doParse arbitraryP (CandyFileParser "Arbitrary [(1,2),(1,2,3)]" 1 emptyDifficulty))
         "Expected a fatal error for invalid tuple"
     ]
 
 testCoordinateListP :: Test
 testCoordinateListP = TestList
     [
-        "Empty list" ~: doParse coordinateListP (ParseState "[]" 1 emptyDifficulty)
-            ~?= Right ([], ParseState "" 1 emptyDifficulty)
-        , "Single pair" ~: doParse coordinateListP (ParseState "[ (1 , 2 ) ]" 1 emptyDifficulty)
-            ~?= Right ([(Coordinate 1, Coordinate 2)], ParseState "" 1 emptyDifficulty)
-        , "Multiple pairs" ~: doParse coordinateListP (ParseState "[ ( 1,2 ), (:,:), (-2, 12)]" 1 emptyDifficulty)
-            ~?= Right ([(Coordinate 1, Coordinate 2), (All, All), (Coordinate (-2), Coordinate 12)], ParseState "" 1 emptyDifficulty)
+        "Empty list" ~: doParse coordinateListP (CandyFileParser "[]" 1 emptyDifficulty)
+            ~?= Right ([], CandyFileParser "" 1 emptyDifficulty)
+        , "Single pair" ~: doParse coordinateListP (CandyFileParser "[ (1 , 2 ) ]" 1 emptyDifficulty)
+            ~?= Right ([(Coordinate 1, Coordinate 2)], CandyFileParser "" 1 emptyDifficulty)
+        , "Multiple pairs" ~: doParse coordinateListP (CandyFileParser "[ ( 1,2 ), (:,:), (-2, 12)]" 1 emptyDifficulty)
+            ~?= Right ([(Coordinate 1, Coordinate 2), (All, All), (Coordinate (-2), Coordinate 12)], CandyFileParser "" 1 emptyDifficulty)
     ]
 
 testCirclePIgnoreCase :: Test
 testCirclePIgnoreCase = TestList
-    [ "circle 3" ~: doParse circleP (ParseState "Circle 3" 1 emptyDifficulty)
-        ~?= Right (Circle 3, ParseState "" 1 emptyDifficulty)
-    , "cirCle 0" ~: doParse circleP (ParseState "cirCle 0" 1 emptyDifficulty)
-        ~?= Right (Circle 0, ParseState "" 1 emptyDifficulty)
-    , "cIrcLe -3" ~: doParse circleP (ParseState "cIrcLe -3" 1 emptyDifficulty)
-        ~?= Right (Circle (-3), ParseState "" 1 emptyDifficulty)
-    , "CIRCLE 100" ~: doParse circleP (ParseState "CIRCLE 100" 1 emptyDifficulty)
-        ~?= Right (Circle 100, ParseState "" 1 emptyDifficulty)
+    [ "circle 3" ~: doParse circleP (CandyFileParser "Circle 3" 1 emptyDifficulty)
+        ~?= Right (Circle 3, CandyFileParser "" 1 emptyDifficulty)
+    , "cirCle 0" ~: doParse circleP (CandyFileParser "cirCle 0" 1 emptyDifficulty)
+        ~?= Right (Circle 0, CandyFileParser "" 1 emptyDifficulty)
+    , "cIrcLe -3" ~: doParse circleP (CandyFileParser "cIrcLe -3" 1 emptyDifficulty)
+        ~?= Right (Circle (-3), CandyFileParser "" 1 emptyDifficulty)
+    , "CIRCLE 100" ~: doParse circleP (CandyFileParser "CIRCLE 100" 1 emptyDifficulty)
+        ~?= Right (Circle 100, CandyFileParser "" 1 emptyDifficulty)
     , "circle 3.15" ~: assertIsFatalError
-        (doParse circleP (ParseState "Circle 3.15" 1 emptyDifficulty))
+        (doParse circleP (CandyFileParser "Circle 3.15" 1 emptyDifficulty))
         "Expected a fatal error for invalid decimal radius"
-    , "CIRCLE 3 4 5" ~: doParse circleP (ParseState "CIRCLE 3 4 5" 1 emptyDifficulty)
-        ~?= Right (Circle 3, ParseState "4 5" 1 emptyDifficulty)
-    , "CIRCLE 3 4" ~: doParse circleP (ParseState "CIRCLE 3 4" 1 emptyDifficulty)
-        ~?= Right (Circle 3, ParseState "4" 1 emptyDifficulty)
+    , "CIRCLE 3 4 5" ~: doParse circleP (CandyFileParser "CIRCLE 3 4 5" 1 emptyDifficulty)
+        ~?= Right (Circle 3, CandyFileParser "4 5" 1 emptyDifficulty)
+    , "CIRCLE 3 4" ~: doParse circleP (CandyFileParser "CIRCLE 3 4" 1 emptyDifficulty)
+        ~?= Right (Circle 3, CandyFileParser "4" 1 emptyDifficulty)
     , "circle a" ~: assertIsFatalError
-        (doParse circleP (ParseState "circle a" 1 emptyDifficulty))
+        (doParse circleP (CandyFileParser "circle a" 1 emptyDifficulty))
         "Expected a fatal error for invalid input"
     ]
 testRectanglePIgnoreCase :: Test
 testRectanglePIgnoreCase = TestList
     [ "Rectangle with positive dimensions" ~:
-        doParse rectangleP (ParseState "Rectangle 3 4" 1 emptyDifficulty)
-        ~?= Right (Rectangle 3 4, ParseState "" 1 emptyDifficulty)
+        doParse rectangleP (CandyFileParser "Rectangle 3 4" 1 emptyDifficulty)
+        ~?= Right (Rectangle 3 4, CandyFileParser "" 1 emptyDifficulty)
     , "Rectangle with zero dimensions" ~:
-        doParse rectangleP (ParseState "ReCtAnGlE 0 0" 1 emptyDifficulty)
-        ~?= Right (Rectangle 0 0, ParseState "" 1 emptyDifficulty)
+        doParse rectangleP (CandyFileParser "ReCtAnGlE 0 0" 1 emptyDifficulty)
+        ~?= Right (Rectangle 0 0, CandyFileParser "" 1 emptyDifficulty)
     , "Rectangle with mixed dimensions" ~:
-        doParse rectangleP (ParseState "rEctAngLe -3 4" 1 emptyDifficulty)
-        ~?= Right (Rectangle (-3) 4, ParseState "" 1 emptyDifficulty)
+        doParse rectangleP (CandyFileParser "rEctAngLe -3 4" 1 emptyDifficulty)
+        ~?= Right (Rectangle (-3) 4, CandyFileParser "" 1 emptyDifficulty)
     , "Rectangle with trailing input" ~:
-        doParse rectangleP (ParseState "RECTANGLE 3 4 5 6 7" 1 emptyDifficulty)
-        ~?= Right (Rectangle 3 4, ParseState "5 6 7" 1 emptyDifficulty)
+        doParse rectangleP (CandyFileParser "RECTANGLE 3 4 5 6 7" 1 emptyDifficulty)
+        ~?= Right (Rectangle 3 4, CandyFileParser "5 6 7" 1 emptyDifficulty)
     , "Rectangle with missing dimension" ~: assertIsFatalError
-        (doParse rectangleP (ParseState "rectangle 3" 1 emptyDifficulty))
+        (doParse rectangleP (CandyFileParser "rectangle 3" 1 emptyDifficulty))
         "Expected a fail error for missing dimension"
     , "Rectangle with invalid input" ~: assertIsFatalError
-        (doParse rectangleP (ParseState "rectangle a 4" 1 emptyDifficulty))
+        (doParse rectangleP (CandyFileParser "rectangle a 4" 1 emptyDifficulty))
         "Expected a fatal error for invalid input"
     ]
 testDiamondPIgnoreCase :: Test
 testDiamondPIgnoreCase = TestList
     [ "Diamond with positive radius" ~:
-        doParse diamondP (ParseState "Diamond 3" 1 emptyDifficulty)
-        ~?= Right (Diamond 3, ParseState "" 1 emptyDifficulty)
+        doParse diamondP (CandyFileParser "Diamond 3" 1 emptyDifficulty)
+        ~?= Right (Diamond 3, CandyFileParser "" 1 emptyDifficulty)
     , "Diamond with zero radius" ~:
-        doParse diamondP (ParseState "DIAMOND 0" 1 emptyDifficulty)
-        ~?= Right (Diamond 0, ParseState "" 1 emptyDifficulty)
+        doParse diamondP (CandyFileParser "DIAMOND 0" 1 emptyDifficulty)
+        ~?= Right (Diamond 0, CandyFileParser "" 1 emptyDifficulty)
     , "Diamond with negative radius" ~:
-        doParse diamondP (ParseState "dIaMoNd -3" 1 emptyDifficulty)
-        ~?= Right (Diamond (-3), ParseState "" 1 emptyDifficulty)
+        doParse diamondP (CandyFileParser "dIaMoNd -3" 1 emptyDifficulty)
+        ~?= Right (Diamond (-3), CandyFileParser "" 1 emptyDifficulty)
     , "Diamond with trailing input" ~:
-        doParse diamondP (ParseState "DIAMOND 3 4" 1 emptyDifficulty)
-        ~?= Right (Diamond 3, ParseState "4" 1 emptyDifficulty)
+        doParse diamondP (CandyFileParser "DIAMOND 3 4" 1 emptyDifficulty)
+        ~?= Right (Diamond 3, CandyFileParser "4" 1 emptyDifficulty)
     , "Diamond with invalid input" ~: assertIsFatalError
-        (doParse diamondP (ParseState "diamond a" 1 emptyDifficulty))
+        (doParse diamondP (CandyFileParser "diamond a" 1 emptyDifficulty))
         "Expected a fatal error for invalid input"
     ]
 
 testEffectRangeP :: Test
 testEffectRangeP = TestList
-    [ "testEffectRangeP valid Circle" ~: doParse effectRangeP (ParseState "cirCle 3" 1 emptyDifficulty)
-          ~?= Right (Circle 3, ParseState "" 1 emptyDifficulty)
+    [ "testEffectRangeP valid Circle" ~: doParse effectRangeP (CandyFileParser "cirCle 3" 1 emptyDifficulty)
+          ~?= Right (Circle 3, CandyFileParser "" 1 emptyDifficulty)
     ,"testEffectRangeP invalid Circle 1" ~: assertIsFatalError
-        (doParse effectRangeP (ParseState "Circle 3.15" 1 emptyDifficulty))
+        (doParse effectRangeP (CandyFileParser "Circle 3.15" 1 emptyDifficulty))
         "Expected a fatal error for invalid decimal radius"
-    , "testEffectRangeP valid Rectangle" ~: doParse effectRangeP (ParseState "Rectangle 3 4" 1 emptyDifficulty)
-          ~?= Right (Rectangle 3 4, ParseState "" 1 emptyDifficulty)
-    , "testEffectRangeP valid Diamond" ~: doParse effectRangeP (ParseState "Diamond 5" 1 emptyDifficulty)
-          ~?= Right (Diamond 5, ParseState "" 1 emptyDifficulty)
-    , "testEffectRangeP valid Arbitrary" ~: doParse effectRangeP (ParseState "Arbitrary [(1,2), (:,:)]" 1 emptyDifficulty)
-          ~?= Right (Arbitrary [(Coordinate 1, Coordinate 2), (All, All)], ParseState "" 1 emptyDifficulty)
+    , "testEffectRangeP valid Rectangle" ~: doParse effectRangeP (CandyFileParser "Rectangle 3 4" 1 emptyDifficulty)
+          ~?= Right (Rectangle 3 4, CandyFileParser "" 1 emptyDifficulty)
+    , "testEffectRangeP valid Diamond" ~: doParse effectRangeP (CandyFileParser "Diamond 5" 1 emptyDifficulty)
+          ~?= Right (Diamond 5, CandyFileParser "" 1 emptyDifficulty)
+    , "testEffectRangeP valid Arbitrary" ~: doParse effectRangeP (CandyFileParser "Arbitrary [(1,2), (:,:)]" 1 emptyDifficulty)
+          ~?= Right (Arbitrary [(Coordinate 1, Coordinate 2), (All, All)], CandyFileParser "" 1 emptyDifficulty)
     , "testEffectRangeP invalid Arbitrary" ~: assertIsFatalError
-        (doParse effectRangeP (ParseState "Arbitrary [(1.3,2), (:,:)]" 1 emptyDifficulty))
+        (doParse effectRangeP (CandyFileParser "Arbitrary [(1.3,2), (:,:)]" 1 emptyDifficulty))
         "Expected a fatal error for unrecognized effect range type"
     , "Unrecognized" ~: assertIsFatalError
-        (doParse effectRangeP (ParseState "InvalidRange 7" 1 emptyDifficulty))
+        (doParse effectRangeP (CandyFileParser "InvalidRange 7" 1 emptyDifficulty))
         "Unrecognized effect range type"
     ]
 
 testEffectNameP :: Test
 testEffectNameP = TestList
   [ "Valid effect name" ~:
-      doParse effectNameP (ParseState "effect_name:StripedRow\n" 1 emptyDifficulty)
-      ~?= Right ("StripedRow", ParseState "" 2 emptyDifficulty)
+      doParse effectNameP (CandyFileParser "effect_name:StripedRow\n" 1 emptyDifficulty)
+      ~?= Right ("StripedRow", CandyFileParser "" 2 emptyDifficulty)
     , "Effect name with spaces" ~:
-        doParse effectNameP (ParseState "effect_name:Striped Row\n" 1 emptyDifficulty)
-        ~?= Right ("Striped Row", ParseState "" 2 emptyDifficulty)
+        doParse effectNameP (CandyFileParser "effect_name:Striped Row\n" 1 emptyDifficulty)
+        ~?= Right ("Striped Row", CandyFileParser "" 2 emptyDifficulty)
     , "testEffectNameP Missing effect name" ~: assertIsFatalError
-        (doParse effectNameP (ParseState "effect_name:\n" 1 emptyDifficulty))
+        (doParse effectNameP (CandyFileParser "effect_name:\n" 1 emptyDifficulty))
         "Expected a FatalError for missing effect name"
     , "Missing EOF" ~: assertIsFatalError
-        (doParse effectNameP (ParseState "effect_name:StripedRow" 1 emptyDifficulty))
+        (doParse effectNameP (CandyFileParser "effect_name:StripedRow" 1 emptyDifficulty))
         "Expected a FatalError for missing newline"
   ]
 testEffectRangeLineP :: Test
 testEffectRangeLineP = TestList
   [ "Valid effect range" ~:
-      doParse effectRangeLineP (ParseState "effect_range: Arbitrary [(:,0)]\n" 1 emptyDifficulty)
-      ~?= Right (Arbitrary [(All, Coordinate 0)], ParseState "" 2 emptyDifficulty)
+      doParse effectRangeLineP (CandyFileParser "effect_range: Arbitrary [(:,0)]\n" 1 emptyDifficulty)
+      ~?= Right (Arbitrary [(All, Coordinate 0)], CandyFileParser "" 2 emptyDifficulty)
   , "Invalid effect range" ~:  assertIsFatalError
-    (doParse effectRangeLineP (ParseState "effect_range: InvalidRange\n" 1 emptyDifficulty))
+    (doParse effectRangeLineP (CandyFileParser "effect_range: InvalidRange\n" 1 emptyDifficulty))
     "Expected a FatalError for invalid effect range"
   ]
 testOperatorP :: Test
 testOperatorP = TestList
   [ "Valid operators" ~: TestList
-      [ doParse operatorP (ParseState "=" 1 emptyDifficulty) ~?= Right (Eq, ParseState "" 1 emptyDifficulty)
-        , doParse operatorP (ParseState ">" 1 emptyDifficulty) ~?= Right (Gt, ParseState "" 1 emptyDifficulty)
-        , doParse operatorP (ParseState ">=\n" 1 emptyDifficulty) ~?= Right (Ge, ParseState "\n" 1 emptyDifficulty)
-        , doParse operatorP (ParseState "<" 1 emptyDifficulty) ~?= Right (Lt, ParseState "" 1 emptyDifficulty)
-        , doParse operatorP (ParseState "<=" 1 emptyDifficulty) ~?= Right (Le, ParseState "" 1 emptyDifficulty)
+      [ doParse operatorP (CandyFileParser "=" 1 emptyDifficulty) ~?= Right (Eq, CandyFileParser "" 1 emptyDifficulty)
+        , doParse operatorP (CandyFileParser ">" 1 emptyDifficulty) ~?= Right (Gt, CandyFileParser "" 1 emptyDifficulty)
+        , doParse operatorP (CandyFileParser ">=\n" 1 emptyDifficulty) ~?= Right (Ge, CandyFileParser "\n" 1 emptyDifficulty)
+        , doParse operatorP (CandyFileParser "<" 1 emptyDifficulty) ~?= Right (Lt, CandyFileParser "" 1 emptyDifficulty)
+        , doParse operatorP (CandyFileParser "<=" 1 emptyDifficulty) ~?= Right (Le, CandyFileParser "" 1 emptyDifficulty)
       ]
     , "unknown operator" ~: assertIsFailError
-        (doParse operatorP (ParseState "--" 1 emptyDifficulty))
+        (doParse operatorP (CandyFileParser "--" 1 emptyDifficulty))
         "Expected a FailError for unknown operator"
   ]
 testEffectRequirementP :: Test
 testEffectRequirementP = TestList
     [
      "Valid effect requirement with =" ~:
-        doParse effectRequirementP (ParseState "effect_requirement: = 5\n" 1 emptyDifficulty)
-        ~?= Right (EffectRequirement Eq 5, ParseState "" 2 emptyDifficulty)
+        doParse effectRequirementP (CandyFileParser "effect_requirement: = 5\n" 1 emptyDifficulty)
+        ~?= Right (EffectRequirement Eq 5, CandyFileParser "" 2 emptyDifficulty)
     , "Valid effect requirement with >" ~:
-        doParse effectRequirementP (ParseState "effect_requirement: > 3\n" 1 emptyDifficulty)
-        ~?= Right (EffectRequirement Gt 3, ParseState "" 2 emptyDifficulty)
+        doParse effectRequirementP (CandyFileParser "effect_requirement: > 3\n" 1 emptyDifficulty)
+        ~?= Right (EffectRequirement Gt 3, CandyFileParser "" 2 emptyDifficulty)
     , "Invalid operator in requirement" ~:
         assertIsFatalError
-            (doParse effectRequirementP (ParseState "effect_requirement: <= 5\n" 1 emptyDifficulty))
+            (doParse effectRequirementP (CandyFileParser "effect_requirement: <= 5\n" 1 emptyDifficulty))
             "Expected a FailError for invalid operator"
     , "Invalid negative number in requirement" ~:
         assertIsFatalError
-            (doParse effectRequirementP (ParseState "effect_requirement: > -5\n" 1 emptyDifficulty))
+            (doParse effectRequirementP (CandyFileParser "effect_requirement: > -5\n" 1 emptyDifficulty))
             "Expected a FailError for negative number"
     , "Invalid number in requirement" ~:
         assertIsFatalError
-            (doParse effectRequirementP (ParseState "effect_requirement: > abc\n" 1 emptyDifficulty))
+            (doParse effectRequirementP (CandyFileParser "effect_requirement: > abc\n" 1 emptyDifficulty))
             "Expected a FailError for invalid number"
     , "Missing number in requirement" ~:
         assertIsFatalError
-            (doParse effectRequirementP (ParseState "effect_requirement: >\n" 1 emptyDifficulty))
+            (doParse effectRequirementP (CandyFileParser "effect_requirement: >\n" 1 emptyDifficulty))
             "Expected a FailError for missing number"
     , "Missing operator in requirement" ~:
         assertIsFatalError
-            (doParse effectRequirementP (ParseState "effect_requirement: 5\n" 1 emptyDifficulty))
+            (doParse effectRequirementP (CandyFileParser "effect_requirement: 5\n" 1 emptyDifficulty))
             "Expected a FailError for missing operator"
     , "Invalid operator in requirement" ~:
         assertIsFatalError
-            (doParse effectRequirementP (ParseState "effect_requirement: >- 5\n" 1 emptyDifficulty))
+            (doParse effectRequirementP (CandyFileParser "effect_requirement: >- 5\n" 1 emptyDifficulty))
             "Expected a FatalError for invalid effect requirement"
   ]
 testEffectDescriptionP :: Test
 testEffectDescriptionP = TestList
   [ "Valid effect description" ~:
-      doParse effectDescriptionP (ParseState "effect_description: Clears the row\n" 1 emptyDifficulty)
-      ~?= Right ("Clears the row", ParseState "" 2 emptyDifficulty)
+      doParse effectDescriptionP (CandyFileParser "effect_description: Clears the row\n" 1 emptyDifficulty)
+      ~?= Right ("Clears the row", CandyFileParser "" 2 emptyDifficulty)
     , "Missing effect description" ~: assertIsFatalError
-        (doParse effectDescriptionP (ParseState "effect_description: \n" 1 emptyDifficulty))
+        (doParse effectDescriptionP (CandyFileParser "effect_description: \n" 1 emptyDifficulty))
         "Expected a FatalError for missing effect description"
     , "Missing newline" ~: assertIsFatalError
-        (doParse effectDescriptionP (ParseState "effect_description: Clears the row" 1 emptyDifficulty))
+        (doParse effectDescriptionP (CandyFileParser "effect_description: Clears the row" 1 emptyDifficulty))
         "Expected a FatalError for missing newline"
   ]
 
-  -- 定义标准测试数据
+-- define the test data
 normalEffectInput1 :: String
 normalEffectInput1 = "effect_name: Normal\n\
                         \effect_range: Arbitrary [(0,0)]\n\
@@ -516,37 +518,37 @@ wrappedEffect1 = Effect
 testValidEffectP :: Test
 testValidEffectP = TestList
     [ "Valid Normal effect" ~:
-        doParse effectP (ParseState normalEffectInput1 1 emptyDifficulty)
-        ~?= Right ((), ParseState "" 5 emptyDifficulty
+        doParse effectP (CandyFileParser normalEffectInput1 1 emptyDifficulty)
+        ~?= Right ((), CandyFileParser "" 5 emptyDifficulty
                                     { effectMap = Map.insert "Normal" 
                                     normalEffect1 (effectMap emptyDifficulty) })
     , "Valid StripedRow effect" ~:
-            doParse effectP (ParseState stripedRowEffectStr 1 emptyDifficulty)
-            ~?= Right ((), ParseState "" 5 emptyDifficulty
+            doParse effectP (CandyFileParser stripedRowEffectStr 1 emptyDifficulty)
+            ~?= Right ((), CandyFileParser "" 5 emptyDifficulty
                                     { effectMap = Map.insert "StripedRow" 
                                     stripedRowEffect1 (effectMap emptyDifficulty) })
     , "Valid Wrapped effect" ~:
-            doParse effectP (ParseState wrappedEffectStr 1 emptyDifficulty)
-            ~?= Right ((), ParseState "" 5 emptyDifficulty
+            doParse effectP (CandyFileParser wrappedEffectStr 1 emptyDifficulty)
+            ~?= Right ((), CandyFileParser "" 5 emptyDifficulty
                                     { effectMap = Map.insert "Wrapped" 
                                     wrappedEffect1 (effectMap emptyDifficulty) })
   ]
 testValidEffectsP :: Test
 testValidEffectsP = TestList
   [ "Valid effects definition" ~:
-      doParse effectsP (ParseState (normalEffectInput1 ++ "\n" ++ "\n"
+      doParse effectsP (CandyFileParser (normalEffectInput1 ++ "\n" ++ "\n"
                                     ++ stripedRowEffectStr) 1 emptyDifficulty)
-      ~?= Right ((), ParseState "" 11 emptyDifficulty
+      ~?= Right ((), CandyFileParser "" 11 emptyDifficulty
                     { effectMap = Map.fromList
                         [ ("Normal", normalEffect1)
                         , ("StripedRow", stripedRowEffect1)
                         ]
                     })
   , "Valid effects with comments and empty lines" ~:
-      doParse effectsP (ParseState ("// Comment\n" ++ normalEffectInput1
+      doParse effectsP (CandyFileParser ("// Comment\n" ++ normalEffectInput1
                                     ++ "\n\n" ++ stripedRowEffectStr
                                     ++ "\n//another comment\n" ++ wrappedEffectStr) 1 emptyDifficulty)
-      ~?= Right ((), ParseState "" 18 emptyDifficulty
+      ~?= Right ((), CandyFileParser "" 18 emptyDifficulty
                     { effectMap = Map.fromList
                         [ ("Normal", normalEffect1)
                         , ("StripedRow", stripedRowEffect1)
@@ -554,9 +556,9 @@ testValidEffectsP = TestList
                         ]
                     })
     , "Valid effects without empty lines" ~:
-        doParse effectsP (ParseState (normalEffectInput1 ++ stripedRowEffectStr
+        doParse effectsP (CandyFileParser (normalEffectInput1 ++ stripedRowEffectStr
                                       ++ wrappedEffectStr) 1 emptyDifficulty)
-        ~?= Right ((), ParseState "" 13 emptyDifficulty
+        ~?= Right ((), CandyFileParser "" 13 emptyDifficulty
                       { effectMap = Map.fromList
                           [ ("Normal", normalEffect1)
                           , ("StripedRow", stripedRowEffect1)
@@ -564,14 +566,14 @@ testValidEffectsP = TestList
                           ]
                       })
     , "Valid update for duplicate effect names" ~:
-        doParse effectsP (ParseState (normalEffectInput1
+        doParse effectsP (CandyFileParser (normalEffectInput1
                                       ++ wrappedEffectStr
                                       ++ "effect_name: Normal\n\
                                         \effect_range: Rectangle 3 3\n\
                                         \effect_requirement: =0\n\
                                         \effect_description: some str..\n")
                                         1 emptyDifficulty)
-        ~?= Right ((), ParseState "" 13 emptyDifficulty
+        ~?= Right ((), CandyFileParser "" 13 emptyDifficulty
                         { effectMap = Map.fromList
                             [ ("Normal", Effect
                                 { effectName = "Normal"
@@ -588,7 +590,7 @@ testInvalidEffectsP :: Test
 testInvalidEffectsP = TestList
   [ "Invalid effects definition" ~:
       assertIsFatalError
-        (doParse effectsP (ParseState "effect_name: Normal\n\
+        (doParse effectsP (CandyFileParser "effect_name: Normal\n\
                                     \effect_range: Arbitrary [(0,0)]\n\
                                     \effect_requirement: =0\n\
                                     \effect_description: some str..\n\
@@ -604,7 +606,7 @@ testInvalidEffectsP = TestList
         "Expected a FatalError for invalid effect range --3"
   , "Invalid effects definition with missing effect name" ~:
       assertIsFatalError
-        (doParse effectsP (ParseState "effect_name: Normal\n\
+        (doParse effectsP (CandyFileParser "effect_name: Normal\n\
                                     \effect_range: Arbitrary [(0,0)]\n\
                                     \effect_requirement: =0\n\
                                     \effect_description: some str..\n\
@@ -619,13 +621,12 @@ testInvalidEffectsP = TestList
         "Expected a FatalError for missing effect name"
   ]
 
-
 -- Invalid effect_name cases
 testInvalidEffectNameP :: Test
 testInvalidEffectNameP = TestList
   [ "Invalid effect_name tag" ~:
       assertIsFatalError
-        (doParse effectP (ParseState "invalid_effect_name: \n\
+        (doParse effectP (CandyFileParser "invalid_effect_name: \n\
                                      \effect_range: Arbitrary [(0,0)]\n\
                                      \effect_requirement: =0\n\
                                      \effect_description: some str..\n"
@@ -633,7 +634,7 @@ testInvalidEffectNameP = TestList
         "Expected a FatalError for invalid effect name"
   , "Invalid effect_name value" ~:
       assertIsFatalError
-        (doParse effectP (ParseState "effect_name: \n\
+        (doParse effectP (CandyFileParser "effect_name: \n\
                                      \effect_range: Arbitrary [(0,0)]\n\
                                      \effect_requirement: =0\n\
                                      \effect_description: some str..\n"
@@ -641,7 +642,7 @@ testInvalidEffectNameP = TestList
         "Expected a FatalError for invalid effect name"
   , "testInvalidEffectNameP Missing effect name" ~:
       assertIsFatalError
-        (doParse effectP (ParseState "effect_range: Arbitrary [(0,0)]\n\
+        (doParse effectP (CandyFileParser "effect_range: Arbitrary [(0,0)]\n\
                                      \effect_requirement: =0\n\
                                      \effect_description: some str..\n"
                                      1 emptyDifficulty))
@@ -653,7 +654,7 @@ testInvalidEffectRangeP :: Test
 testInvalidEffectRangeP = TestList
   [ "Invalid effect_range tag" ~:
       assertIsFatalError
-        (doParse effectP (ParseState "effect_name: Normal\n\
+        (doParse effectP (CandyFileParser "effect_name: Normal\n\
                                      \invalid effect_range: Circle 3\n\
                                      \effect_requirement: =0\n\
                                      \effect_description: some str..\n"
@@ -661,7 +662,7 @@ testInvalidEffectRangeP = TestList
         "Expected a FatalError for invalid effect range"
   , "Invalid effect_range value" ~:
       assertIsFatalError
-        (doParse effectP (ParseState "effect_name: Normal\n\
+        (doParse effectP (CandyFileParser "effect_name: Normal\n\
                                      \effect_range: InvalidRange\n\
                                      \effect_requirement: =0\n\
                                      \effect_description: some str..\n"
@@ -669,7 +670,7 @@ testInvalidEffectRangeP = TestList
         "Expected a FatalError for invalid effect range"
   , "Missing effect_range" ~:
       assertIsFatalError
-        (doParse effectP (ParseState "effect_name: Normal\n\
+        (doParse effectP (CandyFileParser "effect_name: Normal\n\
                                      \effect_requirement: =0\n\
                                      \effect_description: some str..\n"
                                      1 emptyDifficulty))
@@ -681,7 +682,7 @@ testInvalidEffectRequirementP :: Test
 testInvalidEffectRequirementP = TestList
   [ "Invalid effect_requirement value" ~:
       assertIsFatalError
-        (doParse effectP (ParseState "effect_name: Normal\n\
+        (doParse effectP (CandyFileParser "effect_name: Normal\n\
                                      \effect_range: Arbitrary [(0,0)]\n\
                                      \effect_requirement: abc\n\
                                      \effect_description: some str..\n"
@@ -689,7 +690,7 @@ testInvalidEffectRequirementP = TestList
         "Expected a FatalError for invalid effect requirement"
   , "Invalid effect_requirement value negative" ~:
       assertIsFatalError
-        (doParse effectP (ParseState "effect_name: Normal\n\
+        (doParse effectP (CandyFileParser "effect_name: Normal\n\
                                      \effect_range: Arbitrary [(0,0)]\n\
                                      \effect_requirement: >-1\n\
                                      \effect_description: some str..\n"
@@ -697,7 +698,7 @@ testInvalidEffectRequirementP = TestList
         "Expected a FatalError for invalid effect requirement"
   , "Missing effect_requirement" ~:
       assertIsFatalError
-        (doParse effectP (ParseState "effect_name: Normal\n\
+        (doParse effectP (CandyFileParser "effect_name: Normal\n\
                                      \effect_range: Arbitrary [(0,0)]\n\
                                      \effect_description: some str..\n"
                                      1 emptyDifficulty))
@@ -709,7 +710,7 @@ testInvalidEffectDescriptionP :: Test
 testInvalidEffectDescriptionP = TestList
   [ "Invalid effect_description tag" ~:
       assertIsFatalError
-        (doParse effectP (ParseState "effect_name: Normal\n\
+        (doParse effectP (CandyFileParser "effect_name: Normal\n\
                                      \effect_range: Arbitrary [(0,0)]\n\
                                      \effect_requirement: =0\n\
                                      \invalid_effect_description: \n"
@@ -717,7 +718,7 @@ testInvalidEffectDescriptionP = TestList
         "Expected a FatalError for invalid effect description"
   , "Missing effect_description" ~:
       assertIsFatalError
-        (doParse effectP (ParseState "effect_name: Normal\n\
+        (doParse effectP (CandyFileParser "effect_name: Normal\n\
                                      \effect_range: Arbitrary [(0,0)]\n\
                                      \effect_requirement: =0\n"
                                      1 emptyDifficulty))
@@ -734,6 +735,22 @@ testEffectP = TestList
   , testInvalidEffectDescriptionP
   , testValidEffectsP
   , testInvalidEffectsP
+  ]
+
+-- Test Action Parser
+testParseAction :: Test
+testParseAction = TestList [
+    "Parse swap action" ~:
+        parseAction hard "swap 1 2 3 4" ~?=
+            Right (Swap (Coordinate 1, Coordinate 2) (Coordinate 3, Coordinate 4)),
+    "Parse click action" ~:
+        parseAction easy "click 1 2" ~?= Right (Click (Coordinate 1, Coordinate 2)),
+        parseAction easy "undo" ~?= Right Undo,
+    "Parse quit action" ~:
+        parseAction easy "quit" ~?= Right Quit,
+    "Parse invalid action" ~:
+        parseAction easy "invalid" ~?= 
+            Left (FailError "Expected string \"hint\" at line 1" 1)
   ]
 
 
@@ -790,25 +807,25 @@ invalidSequenceInput =
 -- Test cases for difficultyConstantP
 testDifficultyConstantP :: Test
 testDifficultyConstantP = TestList
-  [ "Valid input" ~: doParse difficultyConstantP (ParseState validConstantInput 1 emptyDifficulty)
-        ~?= Right ((), ParseState "" 8 emptyDifficulty { dimension = 5, maxSteps = 10 })
+  [ "Valid input" ~: doParse difficultyConstantP (CandyFileParser validConstantInput 1 emptyDifficulty)
+        ~?= Right ((), CandyFileParser "" 8 emptyDifficulty { dimension = 5, maxSteps = 10 })
     , "Invalid dimension tag" ~: assertIsFatalError
-        (doParse difficultyConstantP (ParseState invalidDimensionTag 1 emptyDifficulty))
+        (doParse difficultyConstantP (CandyFileParser invalidDimensionTag 1 emptyDifficulty))
         "Expected an error for invalid dimension tag"
     , "Invalid dimension value" ~: assertIsFatalError
-        (doParse difficultyConstantP (ParseState invalidDimensionValue 1 emptyDifficulty))
+        (doParse difficultyConstantP (CandyFileParser invalidDimensionValue 1 emptyDifficulty))
         "Expected an error for invalid dimension value"
     ,  "Invalid max_steps tag" ~: assertIsFatalError
-        (doParse difficultyConstantP (ParseState invalidMaxStepsTag 1 emptyDifficulty))
+        (doParse difficultyConstantP (CandyFileParser invalidMaxStepsTag 1 emptyDifficulty))
         "Expected an error for invalid max_steps tag"
     , "Invalid max_steps value" ~: assertIsFatalError
-        (doParse difficultyConstantP (ParseState invalidMaxStepsValue 1 emptyDifficulty))
+        (doParse difficultyConstantP (CandyFileParser invalidMaxStepsValue 1 emptyDifficulty))
         "Expected an error for invalid max_steps value"
     , "Invalid block input" ~: assertIsFatalError
-        (doParse difficultyConstantP (ParseState invalidBlockInput 1 emptyDifficulty))
+        (doParse difficultyConstantP (CandyFileParser invalidBlockInput 1 emptyDifficulty))
         "Expected to stop parsing at the first invalid character"
     , "Invalid sequence input" ~: assertIsFatalError
-        (doParse difficultyConstantP (ParseState invalidSequenceInput 1 emptyDifficulty))
+        (doParse difficultyConstantP (CandyFileParser invalidSequenceInput 1 emptyDifficulty))
         "Expected to stop parsing at the first invalid character"
   ]
 
@@ -895,14 +912,14 @@ validCandyInput3 =
 testValidCandyP :: Test
 testValidCandyP = TestList
   [ "Valid candy input 1" ~:
-      doParse candiesP (ParseState validCandyInput1 1 testDifficultyWithSomeEffects)
-      ~?= Right ((), ParseState "" 7 (testDifficultyWithSomeEffects { candyMap = Map.singleton "CandyShape1" validCandy1 }))
+      doParse candiesP (CandyFileParser validCandyInput1 1 testDifficultyWithSomeEffects)
+      ~?= Right ((), CandyFileParser "" 7 (testDifficultyWithSomeEffects { candyMap = Map.singleton "CandyShape1" validCandy1 }))
     , "Valid candy input 2" ~:
-      doParse candiesP (ParseState validCandyInput2 1 testDifficultyWithSomeEffects)
-      ~?= Right ((), ParseState "" 7 (testDifficultyWithSomeEffects { candyMap = Map.singleton "CandyShape2" validCandy2 }))
+      doParse candiesP (CandyFileParser validCandyInput2 1 testDifficultyWithSomeEffects)
+      ~?= Right ((), CandyFileParser "" 7 (testDifficultyWithSomeEffects { candyMap = Map.singleton "CandyShape2" validCandy2 }))
     , "Valid candy input 3" ~:
-        doParse candiesP (ParseState validCandyInput3 1 testDifficultyWithSomeEffects)
-        ~?= Right ((), ParseState "" 7 (testDifficultyWithSomeEffects { candyMap = Map.singleton "CandyShape3" validCandy3 }))
+        doParse candiesP (CandyFileParser validCandyInput3 1 testDifficultyWithSomeEffects)
+        ~?= Right ((), CandyFileParser "" 7 (testDifficultyWithSomeEffects { candyMap = Map.singleton "CandyShape3" validCandy3 }))
   ]
 
 -- Missing shape_name
@@ -957,25 +974,25 @@ invalidCandyUndefinedEffectName =
 testInvalidCandyP :: Test
 testInvalidCandyP = TestList
   [ "Missing shape_icon tag" ~: assertIsFatalError
-        (doParse candiesP (ParseState invalidCandyMissingShapeIconTag 1 testDifficultyWithSomeEffects))
+        (doParse candiesP (CandyFileParser invalidCandyMissingShapeIconTag 1 testDifficultyWithSomeEffects))
         "Expected error due to missing shape_icon"
     , "Missing shape_name tag" ~: assertIsFatalError
-            (doParse candiesP (ParseState invalidCandyMissingShapeNameTag 1 testDifficultyWithSomeEffects))
+            (doParse candiesP (CandyFileParser invalidCandyMissingShapeNameTag 1 testDifficultyWithSomeEffects))
             "Expected error due to missing shape_name"
     , "Missing effect_name tag" ~: assertIsFatalError
-            (doParse candiesP (ParseState invalidCandyMissingEffectTag 1 testDifficultyWithSomeEffects))
+            (doParse candiesP (CandyFileParser invalidCandyMissingEffectTag 1 testDifficultyWithSomeEffects))
             "Expected error due to missing effect_name"
     , "Missing shape_icon value" ~: assertIsFatalError
-            (doParse candiesP (ParseState invalidCandyMissingShapeIconValue 1 testDifficultyWithSomeEffects))
+            (doParse candiesP (CandyFileParser invalidCandyMissingShapeIconValue 1 testDifficultyWithSomeEffects))
             "Expected error due to missing shape_icon value"
     , "Missing shape_name value" ~: assertIsFatalError
-        (doParse candiesP (ParseState invalidCandyMissingShapeNameValue 1 testDifficultyWithSomeEffects))
+        (doParse candiesP (CandyFileParser invalidCandyMissingShapeNameValue 1 testDifficultyWithSomeEffects))
         "Expected error due to missing shape_name value"
     , "Missing effect_name value" ~: assertIsFatalError
-        (doParse candiesP (ParseState invalidCandyMissingEffectValue 1 testDifficultyWithSomeEffects))
+        (doParse candiesP (CandyFileParser invalidCandyMissingEffectValue 1 testDifficultyWithSomeEffects))
         "Expected error due to missing effect_name value"
     , "Undefined effect name" ~: assertIsFatalError
-        (doParse candiesP (ParseState invalidCandyUndefinedEffectName 1 testDifficultyWithSomeEffects))
+        (doParse candiesP (CandyFileParser invalidCandyUndefinedEffectName 1 testDifficultyWithSomeEffects))
         "Expected error due to undefined effect name"
   ]
 
@@ -1012,10 +1029,10 @@ invalidCandiesInputUndefinedEffectName =
 testCandiesP :: Test
 testCandiesP = TestList
   [ "Valid candies input" ~:
-      doParse candiesP (ParseState (validCandyInput1 ++ "\n\n//\n" 
+      doParse candiesP (CandyFileParser (validCandyInput1 ++ "\n\n//\n" 
                                     ++ validCandyInput2 ++ "\n\n//\n"
                                     ++ validCandyInput3) 1 testDifficultyWithSomeEffects)
-      ~?= Right ((), ParseState "" 25 testDifficultyWithSomeEffects {
+      ~?= Right ((), CandyFileParser "" 25 testDifficultyWithSomeEffects {
           candyMap = Map.fromList [
               ("CandyShape1", validCandy1),
               ("CandyShape2", validCandy2),
@@ -1025,21 +1042,21 @@ testCandiesP = TestList
 
   , "Invalid candies input: missing effect_name" ~:
       assertIsFatalError
-        (doParse candiesP (ParseState invalidCandiesInputMissingEffectName 1 testDifficultyWithSomeEffects))
+        (doParse candiesP (CandyFileParser invalidCandiesInputMissingEffectName 1 testDifficultyWithSomeEffects))
         "Expected a FatalError for missing effect_name value"
 
   , "Invalid candies input: undefined effect_name" ~:
       assertIsFatalError
-        (doParse candiesP (ParseState invalidCandiesInputUndefinedEffectName 1 testDifficultyWithSomeEffects))
+        (doParse candiesP (CandyFileParser invalidCandiesInputUndefinedEffectName 1 testDifficultyWithSomeEffects))
         "Expected a FatalError for undefined effect_name reference"
     , "duplicate candy overwrites the previous one" ~:
-        doParse candiesP (ParseState (validCandyInput1 ++ "\n\n//\n" 
+        doParse candiesP (CandyFileParser (validCandyInput1 ++ "\n\n//\n" 
                                     ++ validCandyInput2 ++ "\n\n//\n"
                                     ++ validCandyInput3 ++ "\n\n//\n"
                                     ++ "shape_name: CandyShape1\n\
                                         \shape_icon: 🍬\n\
                                         \effect_name: effect3\n") 1 testDifficultyWithSomeEffects)
-        ~?= Right ((), ParseState "" 31 testDifficultyWithSomeEffects {
+        ~?= Right ((), CandyFileParser "" 31 testDifficultyWithSomeEffects {
             candyMap = Map.fromList [
                 ("CandyShape1", validCandy1 { 
                     candyDef = (candyDef validCandy1) { effectNameRef = "effect3" },
@@ -1061,35 +1078,36 @@ testCandies = TestList
 
 allParserUnitTests :: Test
 allParserUnitTests = TestList
-    [ testIntP
-    , testBetween
-    , testSepBy
-    , testSepBy1
-    , testString
-    , testStringP
-    , testStripP
-    , testParens
-    , testEmptyLine
-    , testCommentLine
-    , testSkipCommentOrEmptyLines
-    , testBrackets
-    , testConstP
-    , testCoordinateP
-    , testCoordinatePairP
-    , testCoordinateListP
-    , testCirclePIgnoreCase
-    , testRectanglePIgnoreCase
-    , testDiamondPIgnoreCase
-    , testArbitraryPIgnoreCase
-    , testEffectRangeP
-    , testEffectRangeLineP
-    , testEffectNameP
-    , testOperatorP
-    , testEffectRequirementP
-    , testEffectDescriptionP
-    , testEffectP
-    , testDifficultyConstantP
-    , testValidCandyP
+    [ 
+        TestLabel "testIntP" testIntP
+        , TestLabel "testBetween" testBetween
+        , TestLabel "testSepBy" testSepBy
+        , TestLabel "testSepBy1" testSepBy1
+        , TestLabel "testString" testString
+        , TestLabel "testStringP" testStringP
+        , TestLabel "testStripP" testStripP
+        , TestLabel "testParens" testParens
+        , TestLabel "testCommentLine" testCommentLine
+        , TestLabel "testSkipCommentOrEmptyLines" testSkipCommentOrEmptyLines
+        , TestLabel "testBrackets" testBrackets
+        , TestLabel "testConstP" testConstP
+        , TestLabel "testCoordinateP" testCoordinateP
+        , TestLabel "testCoordinatePairP" testCoordinatePairP
+        , TestLabel "testCoordinateListP" testCoordinateListP
+        , TestLabel "testCirclePIgnoreCase" testCirclePIgnoreCase
+        , TestLabel "testRectanglePIgnoreCase" testRectanglePIgnoreCase
+        , TestLabel "testDiamondPIgnoreCase" testDiamondPIgnoreCase
+        , TestLabel "testArbitraryPIgnoreCase" testArbitraryPIgnoreCase
+        , TestLabel "testEffectRangeP" testEffectRangeP
+        , TestLabel "testEffectRangeLineP" testEffectRangeLineP
+        , TestLabel "testEffectNameP" testEffectNameP
+        , TestLabel "testOperatorP" testOperatorP
+        , TestLabel "testEffectRequirementP" testEffectRequirementP
+        , TestLabel "testEffectDescriptionP" testEffectDescriptionP
+        , TestLabel "testEffectP" testEffectP
+        , TestLabel "testDifficultyConstantP" testDifficultyConstantP
+        , TestLabel "testActionP" testParseAction
+        , TestLabel "testCandies" testCandies
     ]
 
 runAllParserUnitTests :: IO Counts

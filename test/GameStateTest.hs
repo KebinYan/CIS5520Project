@@ -14,7 +14,8 @@ testInitializeGrid = TestCase $ do
     grid <- initializeGrid hard
     let dim = dimension hard
     assertEqual "Grid dimensions match" dim (length (board grid))
-    assertEqual "Grid initialized with correct normal candies" (dim * dim) (length (concat (board grid)))
+    assertEqual "Grid initialized with correct normal candies" 
+        (dim * dim) (length (concat (board grid)))
 
 testSplitIntoRows :: Test
 testSplitIntoRows = TestCase $ do
@@ -68,7 +69,8 @@ testUndoable :: Test
 testUndoable = TestCase $ do
     let grid = initialGrid
         initialState = GameState grid easy Nothing 50 0
-    assertEqual "InitialState not undoable" False =<< evalStateT undoable initialState
+    assertEqual "InitialState not undoable" False =<< 
+        evalStateT undoable initialState
     nextState <- execStateT (updateGridState grid) initialState
     isUndoable <- evalStateT undoable nextState
     assertEqual "UpdatedState undoable" True isUndoable
@@ -93,8 +95,10 @@ prop_allCandiesValid d = monadicIO $ do
     grid <- run $ initializeGrid d
     let validShapes = map (shapeName . candyDef) (normalCandies grid)
         allCandies = concat (board grid)
-        allShapesValid = all (\c -> shapeName (candyDef c) `elem` validShapes) allCandies
-        allEffectsNormal = all (\c -> effectNameRef (candyDef c) == "Normal") allCandies
+        allShapesValid = 
+            all (\c -> shapeName (candyDef c) `elem` validShapes) allCandies
+        allEffectsNormal = 
+            all (\c -> effectNameRef (candyDef c) == "Normal") allCandies
     Test.QuickCheck.Monadic.assert $ allShapesValid && allEffectsNormal
 
 -- Property: splitIntoRows should reconstruct the original list
@@ -107,15 +111,18 @@ prop_splitIntoRows xs = not (null xs) ==> monadicIO $ do
 prop_updateUndo :: Difficulty -> Property
 prop_updateUndo d = monadicIO $ do
     gameState <- run $ generate (genGameState d)
-    updatedState <- run $ execStateT (updateGridState (currentGrid gameState)) gameState
+    updatedState <- run $ 
+        execStateT (updateGridState (currentGrid gameState)) gameState
     prevState <- run $ execStateT undoStep updatedState
-    Test.QuickCheck.Monadic.assert $ currentGrid prevState == currentGrid gameState
+    Test.QuickCheck.Monadic.assert $ 
+        currentGrid prevState == currentGrid gameState
 
 -- Property: undo step can only consecutively undo once
 prop_undoOnce :: Difficulty -> Property
 prop_undoOnce d = monadicIO $ do
     gameState <- run $ generate (genGameState d)
-    updatedState <- run $ execStateT (updateGridState (currentGrid gameState)) gameState
+    updatedState <- run $ 
+        execStateT (updateGridState (currentGrid gameState)) gameState
     prevState <- run $ execStateT undoStep updatedState
     prevState2 <- run $ execStateT undoStep prevState
     Test.QuickCheck.Monadic.assert $ prevState == prevState2

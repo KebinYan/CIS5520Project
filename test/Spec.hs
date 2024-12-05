@@ -1,7 +1,7 @@
 import Test.HUnit
 import Test.QuickCheck
 
-import CandyTest
+import CandyCrushParserTest
 import GameStateTest
 import GameUtilsTest
 import GameControllerTest
@@ -12,8 +12,8 @@ main :: IO ()
 main = do
     putStrLn "Candy Crush Test Suite"
     putStrLn "Running HUnit tests..."
-    putStrLn "Running Candy tests:"
-    -- CandyTest.runUnitTests
+    putStrLn "Running CandyCrushParser tests:"
+    CandyCrushParserTest.runAllParserUnitTests
     putStrLn "Running GameState tests:"
     GameStateTest.runUnitTests
     putStrLn "Running GameUtils tests:"
@@ -21,8 +21,6 @@ main = do
     putStrLn "Running GameController tests:"
     GameControllerTest.runUnitTests
     putStrLn "Running QuickCheck tests..."
-    putStrLn "\nRunning Candy tests:"
-    -- CandyTest.runQuickCheckTests
     putStrLn "\nRunning GameState tests:"
     GameStateTest.runQuickCheckTests
     putStrLn "\nRunning GameUtils tests:"

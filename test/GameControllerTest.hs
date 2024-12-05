@@ -28,21 +28,6 @@ testConstructors = TestList [
     TestLabel "constructDisappear" testConstructDisappear
   ]
 
--- Test Action Parser
-testParseAction :: Test
-testParseAction = TestList [
-    "Parse swap action" ~:
-        parseAction "swap 1 2 3 4" ~?=
-            Right (Swap (Coordinate 1, Coordinate 2) (Coordinate 3, Coordinate 4)),
-    "Parse click action" ~:
-        parseAction "click 1 2" ~?= Right (Click (Coordinate 1, Coordinate 2)),
-        parseAction "undo" ~?= Right Undo,
-    "Parse quit action" ~:
-        parseAction "quit" ~?= Right Quit,
-    "Parse invalid action" ~:
-        parseAction "invalid" ~?= Left "No parses"
-  ]
-
 -- Test helper functions for swap action
 testSwapCandies :: Test
 testSwapCandies = TestCase $ do
@@ -384,7 +369,6 @@ runUnitTests :: IO Counts
 runUnitTests = runTestTT $ TestList
     [
         TestLabel "testConstructors" testConstructors,
-        TestLabel "testParseAction" testParseAction,
         TestLabel "testSwapHelpers" testSwapHelpers,
         TestLabel "testActions" testActions,
         TestLabel "testApplyAction" testApplyAction,

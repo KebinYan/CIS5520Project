@@ -1,5 +1,3 @@
--- GameController.hs
-
 module GameController where
 
 import Control.Monad
