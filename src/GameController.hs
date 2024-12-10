@@ -17,38 +17,44 @@ import Phd
 import CandyCrushParser
 
 -- The main game loop
-gameLoop :: Difficulty -> IO ()
+gameLoop :: GameConst -> IO ()
 gameLoop d = do
     initialState <- initializeGameState d
     state <- fillAndCrushStateIO initialState
     gameStep state
 
 gameStep :: GameState -> IO ()
-gameStep state = do
+gameStep s = do
+    state <- execStateT resetScoreChange s
     let possibleMove = findMovable (currentGrid state)
     case possibleMove of
         Just _ -> printStateGrid state
         Nothing -> do
             -- reinitialize the grid if there are no possible moves
             putStrLn "No possible moves left, reinitializing the grid"
-            newGrid <- initializeGrid (difficulty state)
+            newGrid <- initializeGrid (gameConst state)
             let newState = state { currentGrid = newGrid }
             filledState <- fillAndCrushStateIO newState
             gameStep filledState
     let grid = currentGrid state
         stepsRemaining = remainingSteps state
     putStrLn $ "Remaining Steps: " ++ show stepsRemaining
+    putStrLn $ "Current Score: " ++ show (score state)
     putStr "Enter your action (swap x1 y1 x2 y2 / click x y / hint / undo / quit): "
     hFlush stdout
 
     input <- candyGetLine
-    let diffculty = difficulty state
-    case parseAction diffculty input of
+    let gc = gameConst state
+    case parseAction gc input of
         Right action ->
             case action of
-                Quit -> putStrLn "Quitting game"
+                Quit -> do
+                    printGameInfo True state
+                    putStrLn "Quitting game"
+                    return ()
                 Hint -> case possibleMove of
-                    Just ((Coordinate x1, Coordinate y1), (Coordinate x2, Coordinate y2)) -> do
+                    Just ((Coordinate x1, Coordinate y1), 
+                        (Coordinate x2, Coordinate y2)) -> do
                         putStrLn $ "Hint: Swap (" ++ show x1 ++ "," ++ show y1
                             ++ ") with (" ++ show x2 ++ "," ++ show y2 ++ ")"
                         gameStep state
@@ -74,6 +80,7 @@ handleAction verbose state action = case action of
             (Coordinate x2, Coordinate y2)
         execStateT (do
             updateGridState newGrid
+            addScore (scoreChange newGrid)
             when verbose $ liftIO $ printGrid newGrid
             ) state
     Cheat (Coordinate x, Coordinate y) candy -> do
@@ -90,6 +97,7 @@ handleAction verbose state action = case action of
         newGrid <- applyClick (currentGrid state) (x, y)
         execStateT (do
             updateGridState newGrid
+            addScore (scoreChange newGrid)
             when verbose $ liftIO $ printGrid newGrid
             ) state
     Undo -> do
@@ -115,10 +123,11 @@ applyAction g (Click (x, y)) = applyClick g (x, y)
 applyAction g _ = return g
 
 applySwap :: GameGrid -> CoordinatePair -> CoordinatePair -> IO GameGrid
-applySwap g@(GameGrid board _ _)
+applySwap g@(GameGrid board _ _ _ _ _)
           coord1@(Coordinate x1, Coordinate y1)
           coord2@(Coordinate x2, Coordinate y2)
-    | not (validCoordinate board coord1) || not (validCoordinate board coord2) = return g
+    | not (validCoordinate board coord1) || not (validCoordinate board coord2) = 
+        return g
     | abs (x1 - x2) + abs (y1 - y2) /= 1 = return g
     | otherwise =
         let newGrid = swapCandies g coord1 coord2
@@ -129,12 +138,13 @@ applySwap g@(GameGrid board _ _)
 applySwap g _ _ = return g
 
 swapCandies :: GameGrid -> CoordinatePair -> CoordinatePair -> GameGrid
-swapCandies g@(GameGrid board _ _) (x1, y1) (x2, y2) =
+swapCandies g@(GameGrid board _ _ _ _ _) (x1, y1) (x2, y2) =
     let c1 = getCandyAt board (x1, y1)
         c2 = getCandyAt board (x2, y2)
         newGrid = case (c1, c2) of
             (Just candy1, Just candy2) ->
-                let newBoard = setCandyAt (setCandyAt board (x1, y1) candy2) (x2, y2) candy1
+                let newBoard = setCandyAt 
+                        (setCandyAt board (x1, y1) candy2) (x2, y2) candy1
                 in updateBoard newBoard g
             _ -> g
     in newGrid
@@ -215,7 +225,7 @@ findNormalCandyCrushables grid coord@(Coordinate x, Coordinate y) =
 findNormalCandyCrushables _ _ = Nothing
 
 applyClick :: GameGrid -> CoordinatePair -> IO GameGrid
-applyClick g@(GameGrid board _ _) coord
+applyClick g@(GameGrid board _ _ _ _ _) coord
     | not (validCoordinate board coord) = return g
     | otherwise =
         let candy = getCandyAt board coord
@@ -225,25 +235,28 @@ applyClick g@(GameGrid board _ _) coord
             _ -> return g
 
 applyDisappear :: GameGrid -> [CoordinatePair] -> IO GameGrid
-applyDisappear g@(GameGrid board _ specialCandies) coords = do
+applyDisappear g@(GameGrid board _ specialCandies crushScore _ scoreChange) 
+    coords = do
     let clearBoard = foldl clearPosition board coords
         disappearCoords = extractDisappearCoords (Disappear coords)
+        newScore = length disappearCoords * crushScore
     specialCandy <- redeemSpecialCandy (length disappearCoords) specialCandies
     case specialCandy of
         Just candy -> do
             let position = coords !! (length coords `div` 2)
                 newBoard = setCandyAt clearBoard position candy
-            return $ updateBoard newBoard g
-        Nothing -> return $ updateBoard clearBoard g
+            return $ updateScore newScore (updateBoard newBoard g)
+        Nothing -> return $ updateScore newScore (updateBoard clearBoard g)
 
 extractDisappearCoords :: Action -> [CoordinatePair]
 extractDisappearCoords (Disappear coords) = coords
 extractDisappearCoords _ = []
 
 applyTrigger :: GameGrid -> CoordinatePair -> Candy -> IO GameGrid
-applyTrigger g@(GameGrid board _ _) coord candy = do
+applyTrigger g@(GameGrid board _ _ _ effectScore scoreChange) coord candy = do
     let newBoard = generateSpecialEffect candy coord board
-    return $ updateBoard newBoard g
+        newScore = effectScore
+    return $ updateScore newScore (updateBoard newBoard g)
 
 fillAndCrushStateIO :: GameState -> IO GameState
 fillAndCrushStateIO state = do
@@ -274,10 +287,11 @@ autoCrush g = do
 
 -- Find all crushable candies in the board
 findAllNormalCrushables :: GameGrid -> [Action]
-findAllNormalCrushables g@(GameGrid board _ _) =
+findAllNormalCrushables g@(GameGrid board _ _ _ _ _) =
     processCoords (allCoordinates board) Set.empty []
     where
-        processCoords :: [CoordinatePair] -> Set.Set CoordinatePair -> [Action] -> [Action]
+        processCoords :: [CoordinatePair] -> Set.Set CoordinatePair 
+            -> [Action] -> [Action]
         processCoords [] _ res = res
         processCoords (coord:coords) visited res
             | Set.member coord visited = processCoords coords visited res
@@ -288,7 +302,8 @@ findAllNormalCrushables g@(GameGrid board _ _) =
                         in processCoords coords newVisited (action : res)
                     Nothing -> processCoords coords visited res
 
-        addDisappearCoords :: Set.Set CoordinatePair -> Action -> Set.Set CoordinatePair
+        addDisappearCoords :: Set.Set CoordinatePair -> Action 
+            -> Set.Set CoordinatePair
         addDisappearCoords visited (Disappear coords) =
             visited `Set.union` Set.fromList coords
         addDisappearCoords visited _ = visited
@@ -314,7 +329,8 @@ findAdjacentSwap :: GameGrid -> CoordinatePair ->
     Set.Set (CoordinatePair, CoordinatePair) ->
     Maybe (CoordinatePair, CoordinatePair)
 findAdjacentSwap grid coord checked =
-    let adjacentCoords = Prelude.filter (validCoordinate (board grid)) $ adjacent coord
+    let adjacentCoords = Prelude.filter (validCoordinate (board grid)) 
+            $ adjacent coord
         unprocessedCoords =
             Prelude.filter (\adj ->
                 not (Set.member (coord, adj) checked

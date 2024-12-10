@@ -3,10 +3,13 @@ module GameUtils where
 import Phd
 import GeneralStateParser
 import System.Random
-import Control.Monad (replicateM)
+import System.IO
+import System.Directory (doesFileExist)
+import Control.Monad (replicateM, when)
+import Control.Exception (evaluate)
+import qualified Data.List as List
 import Data.Map (Map, insertWith, empty, lookup)
 import qualified Data.Set as Set
-
 -- Generate a random Candy based on a provided list of CandyShape
 -- | candyShapes: the list of available CandyShape
 generateRandomCandy :: [Candy] -> IO Candy
@@ -22,7 +25,8 @@ generateRandomCandyList :: Int -> [Candy] -> IO [Candy]
 generateRandomCandyList len candies =
     replicateM len (generateRandomCandy candies)
 
--- Generate the special effect for a special candy based on the special effect range
+-- Generate the special effect for a special candy based on the special effect 
+-- range
 generateSpecialEffect :: Candy -> (CoordinatePair -> [[Candy]] -> [[Candy]])
 generateSpecialEffect candy coord board =
     case coord of
@@ -67,18 +71,23 @@ computeDiamondPositions (x, y) r =
 -- | (nRows, nCols): the dimension of the board
 -- | (x, y): the coordinate of the special candy
 -- | coords: the list of coordinates to clear
-computeArbitraryPositions :: (Int, Int) -> (Int, Int) -> [CoordinatePair] -> [CoordinatePair]
+computeArbitraryPositions :: (Int, Int) -> (Int, Int) ->
+    [CoordinatePair] -> [CoordinatePair]
 computeArbitraryPositions (nRows, nCols) (x, y) =
     Set.toList . foldl
-        (\acc coord -> expandCoords (nRows, nCols) (x, y) coord `Set.union` acc) Set.empty
+        (\acc coord -> expandCoords (nRows, nCols) (x, y) coord `Set.union` acc)
+                                    Set.empty
     where
-        expandCoords :: (Int, Int) -> (Int, Int) -> CoordinatePair -> Set.Set CoordinatePair
+        expandCoords :: (Int, Int) -> (Int, Int) -> CoordinatePair ->
+            Set.Set CoordinatePair
         expandCoords (nRows, nCols) (x, y) (Coordinate dx, Coordinate dy) =
             Set.singleton (Coordinate (x + dx), Coordinate (y + dy))
         expandCoords (nRows, nCols) (x, y) (All, Coordinate dy) =
-            Set.fromList [(Coordinate row , Coordinate (y + dy)) | row <- [0..nCols - 1]]
+            Set.fromList
+                [(Coordinate row , Coordinate (y + dy)) | row <- [0..nCols - 1]]
         expandCoords (nRows, nCols) (x, y) (Coordinate dx, All) =
-            Set.fromList [(Coordinate (x + dx), Coordinate col) | col <- [0..nRows - 1]]
+            Set.fromList
+                [(Coordinate (x + dx), Coordinate col) | col <- [0..nRows - 1]]
         expandCoords (nRows, nCols) (x, y) (All, All) =
             Set.fromList [(Coordinate row, Coordinate col)
                 | row <- [0..nCols - 1], col <- [0..nRows - 1]]
@@ -151,11 +160,13 @@ extractSpecialCandies dim = foldr extractSpecialCandy Data.Map.empty
                     else acc
                 EffectRequirement Ge n ->
                     if n < dim * dim
-                    then foldr (\i -> insertWith (++) i [candy]) acc [n.. dim * dim]
+                    then foldr (\i -> insertWith (++) i [candy]) acc
+                                [n.. dim * dim]
                     else acc
                 EffectRequirement Gt n ->
                     if n < dim * dim
-                    then foldr (\i -> insertWith (++) i [candy]) acc [n + 1.. dim * dim]
+                    then foldr (\i -> insertWith (++) i [candy]) acc
+                                [n + 1.. dim * dim]
                     else acc
                 _ -> acc
 
@@ -191,3 +202,92 @@ fillRow row candies
         if candy == EmptyCandy
         then generateRandomCandy candies
         else return candy) row
+
+-- Persist the current game info
+printGameInfo :: Bool -> GameState -> IO ()
+printGameInfo verbose gameState = do
+    let gameConstants = gameConst gameState
+        dim = dimension gameConstants
+        steps = maxSteps gameConstants
+        scoreVal = score gameState
+        block = formatBlock dim steps scoreVal
+        fileName = "score.txt"
+    fileExists <- doesFileExist fileName
+    if not fileExists
+    then do
+        -- Create and write the new block
+        writeFile fileName block
+        when verbose $ putStrLn "Created score.txt and wrote the data."
+    else do
+        -- Read the contents of the file
+        -- Use withFile to ensure the file is closed after reading
+        contents <- withFile fileName ReadMode (\handle -> do
+            contents <- hGetContents handle
+            evaluate (length contents) -- Force load entire content into memory
+            return contents)
+        let blocks = splitBlocks contents
+            matchingBlock = findBlock blocks dim steps
+            updatedBlocks =
+                case matchingBlock of
+                    Just _  -> map (\b ->
+                        if isMatchingBlock b dim steps
+                        then lines $ updateScoreBlock dim steps scoreVal b
+                        else lines b) blocks
+                    Nothing -> blocks : [lines block]
+        -- Write back the updated contents
+        writeFile fileName (unlines $ List.intercalate [""] updatedBlocks)
+        when verbose $ putStrLn "Updated score.txt with the data."
+
+formatBlock :: Int -> Int -> Int -> String
+formatBlock dim steps score =
+    "dimension: " ++ show dim ++ "\n" ++
+    "maxSteps: " ++ show steps ++ "\n" ++
+    "score: " ++ show score
+
+isMatchingBlock :: String -> Int -> Int -> Bool
+isMatchingBlock block targetDim targetSteps =
+    case parseBlock block of
+        Just (dim, steps) -> dim == targetDim && steps == targetSteps
+        Nothing -> False
+
+parseBlock :: String -> Maybe (Int, Int)
+parseBlock block = do
+    let linesOfBlock = lines block
+        dimLine = List.find ("dimension:" `List.isPrefixOf`) linesOfBlock
+        stepsLine = List.find ("maxSteps:" `List.isPrefixOf`) linesOfBlock
+    case (dimLine, stepsLine) of
+        (Just d, Just s) -> do
+            let dim = read (drop (length "dimension: ") d) :: Int
+            let steps = read (drop (length "maxSteps: ") s) :: Int
+            Just (dim, steps)
+        _ -> Nothing
+
+splitBlocks :: String -> [String]
+splitBlocks = Prelude.filter (not . null) . splitOn "\n\n"
+
+splitOn :: String -> String -> [String]
+splitOn delim str = go str []
+  where
+    go [] current = [reverse current]
+    go s current
+      | delim `List.isPrefixOf` s =
+        reverse current : go (drop (length delim) s) []
+      | otherwise = case s of
+          (c:cs) -> go cs (c : current)
+
+findBlock :: [String] -> Int -> Int -> Maybe String
+findBlock blocks dim steps =
+    List.find (\block -> ("dimension: " ++ show dim) `List.isInfixOf` block &&
+                    ("maxSteps: " ++ show steps) `List.isInfixOf` block) blocks
+
+updateScoreBlock :: Int -> Int -> Int -> String -> String
+updateScoreBlock dim steps newScore block
+    | ("dimension: " ++ show dim) `List.isInfixOf` block &&
+      ("maxSteps: " ++ show steps) `List.isInfixOf` block =
+        unlines $ map (updateScoreLine newScore) (lines block)
+    | otherwise = block
+
+updateScoreLine :: Int -> String -> String
+updateScoreLine newScore line
+    | "score:" `List.isPrefixOf` line = "score: " ++ show newScore
+    | otherwise = line

@@ -4,8 +4,8 @@ module TestUtils where
 import Test.QuickCheck
 
 import Phd
-import CandyCrushParser
 import GeneralStateParser
+import CandyCrushParser
 import qualified Data.Map as Map
 import Control.Monad
 import System.IO.Unsafe (unsafePerformIO)
@@ -92,16 +92,16 @@ candy7 = Candy {
 }
 
 -- Use unsafePerformIO to extract pure values from IO actions
-unsafeEasy :: Either ParseError Difficulty
+unsafeEasy :: Either ParseError GameConst
 unsafeEasy = unsafePerformIO $ parseFile "config/easy"
 
-unsafeMedium :: Either ParseError Difficulty
+unsafeMedium :: Either ParseError GameConst
 unsafeMedium = unsafePerformIO $ parseFile "config/medium"
 
-unsafeHard :: Either ParseError Difficulty
+unsafeHard :: Either ParseError GameConst
 unsafeHard = unsafePerformIO $ parseFile "config/hard"
 
-easy, medium, hard :: Difficulty
+easy, medium, hard :: GameConst
 easy = either (error . show) id unsafeEasy
 medium = either (error . show) id unsafeMedium
 hard = either (error . show) id unsafeHard
@@ -118,7 +118,10 @@ initialGrid = GameGrid
         specialCandies = Map.fromList [
             (4, [candy6]),
             (5, [candy5])
-        ]
+        ],
+        crushScore = 10,
+        effectScore = 50,
+        scoreChange = 0
     }
 
 crushableGrid :: GameGrid
@@ -136,7 +139,10 @@ crushableGrid = GameGrid
             (5, [candy6]),
             (6, [candy6]),
             (7, [candy6])
-        ]
+        ],
+        crushScore = 10,
+        effectScore = 50,
+        scoreChange = 150
     }
 
 gridWithEmptyCandy :: GameGrid
@@ -151,12 +157,15 @@ gridWithEmptyCandy = GameGrid
         specialCandies = Map.fromList [
             (4, [candy6]),
             (5, [candy5])
-        ]
+        ],
+    crushScore = 10,
+    effectScore = 50,
+    scoreChange = 0
     }
 
 -- Arbitrary instances for quickcheck
-instance Arbitrary Difficulty where
-    arbitrary :: Gen Difficulty
+instance Arbitrary GameConst where
+    arbitrary :: Gen GameConst
     arbitrary = elements [easy, medium, hard]
 
 instance Arbitrary Operator where
@@ -174,26 +183,26 @@ instance Arbitrary CandyDefinition where
 genNormalDef :: Gen CandyDefinition
 genNormalDef = CandyDefinition <$> arbitrary <*> arbitrary <*> pure "Normal"
 
-genArbCoord :: Difficulty -> Gen Coordinate
+genArbCoord :: GameConst -> Gen Coordinate
 genArbCoord d =
     frequency [
         (1, return All),
         (1, Coordinate <$> choose (0, dimension d - 1))
     ]
 
-genArbIntCoord :: Difficulty -> Gen Coordinate
+genArbIntCoord :: GameConst -> Gen Coordinate
 genArbIntCoord d = Coordinate <$> choose (0, dimension d - 1)
 
-genArbCoordPair :: Difficulty -> Gen CoordinatePair
+genArbCoordPair :: GameConst -> Gen CoordinatePair
 genArbCoordPair d = (,) <$> genArbCoord d <*> genArbCoord d
 
-genArbIntCoordPair :: Difficulty -> Gen CoordinatePair
+genArbIntCoordPair :: GameConst -> Gen CoordinatePair
 genArbIntCoordPair d = (,) <$> genArbIntCoord d <*> genArbIntCoord d
 
-genArbNormalCandy :: Difficulty -> Gen Candy
+genArbNormalCandy :: GameConst -> Gen Candy
 genArbNormalCandy d = Candy <$> genNormalDef <*> pure normalEffect
 
-genArbSpecialCandy :: Difficulty -> Gen Candy
+genArbSpecialCandy :: GameConst -> Gen Candy
 genArbSpecialCandy d = do
     candyDef <- arbitrary `suchThat` isSpecialCandyDef
     effectRange <- genArbEffectRange d
@@ -209,7 +218,7 @@ genArbSpecialCandy d = do
         }
     }
 
-genArbEffectRange :: Difficulty -> Gen EffectRange
+genArbEffectRange :: GameConst -> Gen EffectRange
 genArbEffectRange d =
     frequency [
         (1, Circle <$> choose (0, 3)),
@@ -218,7 +227,7 @@ genArbEffectRange d =
         (1, Arbitrary <$> listOf (genArbCoordPair d))
     ]
 
-genGameBoard :: Difficulty -> Gen [Candy] -> Gen [[Candy]]
+genGameBoard :: GameConst -> Gen [Candy] -> Gen [[Candy]]
 genGameBoard d candies = do
     let dim = dimension d
     candiesList <- candies
@@ -231,7 +240,7 @@ genGameBoardWithEmpty candies = do
     candiesList <- candies
     vectorOf n (vectorOf m (oneof [elements candiesList, pure EmptyCandy]))
 
-genGameGrid :: Difficulty -> Gen GameGrid
+genGameGrid :: GameConst -> Gen GameGrid
 genGameGrid d =
     let normalCandies =
             liftM2 (++) (replicateM (dimension d) (genArbNormalCandy d))
@@ -239,9 +248,12 @@ genGameGrid d =
     in GameGrid <$>
         genGameBoard d normalCandies <*>
         normalCandies <*>
-        genSpecialCandyMap d
+        genSpecialCandyMap d <*>
+        choose (0, 100) <*>
+        choose (0, 100) <*>
+        choose (0, 100)
 
-genGameState :: Difficulty -> Gen GameState
+genGameState :: GameConst -> Gen GameState
 genGameState d = GameState <$>
     genGameGrid d <*>
     return d <*>
@@ -249,17 +261,17 @@ genGameState d = GameState <$>
     choose (0, 100) <*>
     choose (0, 100)
 
-genSpecialCandyMap :: Difficulty -> Gen (Map.Map Int [Candy])
+genSpecialCandyMap :: GameConst -> Gen (Map.Map Int [Candy])
 genSpecialCandyMap d = do
     mapSize <- choose (1, 5)
     num <- vectorOf mapSize (choose (1, 5))
     candiesList <- vectorOf mapSize (listOf1 (genArbSpecialCandy d))
     return $ Map.fromList $ zip num candiesList
 
-genEmptyCandyCoords :: Difficulty -> Gen [CoordinatePair]
+genEmptyCandyCoords :: GameConst -> Gen [CoordinatePair]
 genEmptyCandyCoords d = listOf (genArbCoordPair d)
 
-genArbAction :: Difficulty -> Gen Action
+genArbAction :: GameConst -> Gen Action
 genArbAction d =
     oneof [
         Swap <$> genArbIntCoordPair d <*> genArbIntCoordPair d,
@@ -270,7 +282,7 @@ genArbAction d =
         Trigger <$> ((,) <$> genArbIntCoordPair d <*> genArbSpecialCandy d)
     ]
 
-genArbUserAction :: Difficulty -> Gen Action
+genArbUserAction :: GameConst -> Gen Action
 genArbUserAction d =
     oneof [
         Swap <$> genArbIntCoordPair d <*> genArbIntCoordPair d,
@@ -279,7 +291,7 @@ genArbUserAction d =
         pure Quit
     ]
 
-genArbReversibleAction :: Difficulty -> Gen Action
+genArbReversibleAction :: GameConst -> Gen Action
 genArbReversibleAction d =
     oneof [
         Swap <$> genArbIntCoordPair d <*> genArbIntCoordPair d,

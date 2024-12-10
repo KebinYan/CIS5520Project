@@ -9,29 +9,31 @@ import Data.List (sort, sortBy)
 import Data.Map (Map, singleton, empty)
 import Control.Monad.State
 
-{-------------------------- Define Difficulty ---------------------------}
+{------------------------------ Define GameConst ------------------------------}
 type Name = String
--- | Difficulty is a record containing the dimension of the game board, 
+-- | GameConst is a record containing the dimension of the game board, 
 -- | a map of candies, a map of effects, and the maximum number of steps
-data Difficulty = Difficulty
+data GameConst = GameConst
   { dimension :: Int
   , candyMap  :: Map Name Candy
   , effectMap :: Map Name Effect
   , maxSteps  :: Int
+  , scorePerCandy :: Int
+  , scorePerEffect :: Int
   } deriving (Show, Eq)
 
--- | An empty Difficulty with default values
-emptyDifficulty :: Difficulty
-emptyDifficulty = Difficulty 0 Data.Map.empty
-  (singleton "Normal" normalEffect) 0
+-- | An default GameConst with default values
+defaultGameConst :: GameConst
+defaultGameConst = GameConst 0 Data.Map.empty
+  (singleton "Normal" normalEffect) 0 0 0
 
 {-------------------------- Define a Parser with State ------------------------}
--- | Parser state containing the input, current line number, and difficulty
+-- | Parser state containing the input, current line number, and gameConst
 -- | This is a parser defined for parsing the game configuration file
 data CandyFileParser = CandyFileParser
   { input      :: String       -- ^ Current input
   , lineNum    :: Int          -- ^ Current line number
-  , pDifficulty :: Difficulty   -- ^ Current context's Difficulty
+  , pGameConst :: GameConst   -- ^ Current context's game constant
   } deriving (Show, Eq)
 
 -- Make CandyFileParser an instance of ParserState
@@ -48,7 +50,7 @@ instance ParserState CandyFileParser where
 -- | Parser type definition
 type Parser a = StateParser CandyFileParser a
 
-{-------------------------- Define Candies ---------------------------}
+{------------------------------ Define Candies --------------------------------}
 type CandyShape = String
 type CandyEffect = String
 
@@ -110,29 +112,33 @@ data CandyDefinition = CandyDefinition
     } deriving (Show, Eq)
 
 
-{-------------------------- Define Game Grid ---------------------------}
+{---------------------------- Define Game Grid --------------------------------}
 -- A GameGrid consists of a 2D grid of candies
 data GameGrid = GameGrid {
         board :: [[Candy]],
         normalCandies :: [Candy],
-        specialCandies :: Map Int [Candy]
+        specialCandies :: Map Int [Candy],
+        crushScore :: Int,
+        effectScore :: Int,
+        scoreChange :: Int
     }
   deriving (Show)
 
 -- check if two boards are equal
 instance Eq GameGrid where
     (==) :: GameGrid -> GameGrid -> Bool
-    (GameGrid board1 normalCandies1 specialCandies1) ==
-        (GameGrid board2 normalCandies2 specialCandies2) =
+    (GameGrid board1 normalCandies1 specialCandies1 _ _ _) == 
+        (GameGrid board2 normalCandies2 specialCandies2 _ _ _) =
         board1 == board2
         && normalCandies1 == normalCandies2
         && specialCandies1 == specialCandies2
 
-{-------------------------- Define Game State ---------------------------}
--- The game state includes the current grid, difficulty level, history for undo, and remaining steps
+{----------------------------- Define Game State ------------------------------}
+-- The game state includes the current grid, game constants, history for undo, 
+-- and remaining steps
 data GameState = GameState {
     currentGrid :: GameGrid,
-    difficulty :: Difficulty,
+    gameConst :: GameConst,
     lastGrid :: Maybe GameGrid,  -- previous grids for undo
     remainingSteps :: Int,  -- number of steps left
     score :: Int            -- current score
@@ -140,7 +146,7 @@ data GameState = GameState {
 
 type GameMonad = StateT GameState IO
 
-{-------------------------- Define Actions ---------------------------}
+{----------------------------- Define Actions ---------------------------------}
 data Action = Swap CoordinatePair CoordinatePair
             | Click CoordinatePair
             | Hint

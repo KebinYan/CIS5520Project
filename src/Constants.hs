@@ -35,3 +35,9 @@ constDimensionTag = "dimension:"
 
 constMaxStepsTag :: String
 constMaxStepsTag = "max_steps:"
+
+constScorePerCandyTag :: String
+constScorePerCandyTag = "score_per_candy:"
+
+constScorePerEffectTag :: String
+constScorePerEffectTag = "score_per_effect:"

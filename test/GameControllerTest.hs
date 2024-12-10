@@ -42,7 +42,8 @@ testSwapCandies = TestCase $ do
 
 testFindNormalCandyCrushables1 :: Test
 testFindNormalCandyCrushables1 = TestCase $ do
-    let crushables = findNormalCandyCrushables crushableGrid (Coordinate 0, Coordinate 0)
+    let crushables = 
+            findNormalCandyCrushables crushableGrid (Coordinate 0, Coordinate 0)
     let expectedCrushables = Just (Disappear
             [(Coordinate 0, Coordinate 0),
              (Coordinate 0, Coordinate 1),
@@ -51,7 +52,8 @@ testFindNormalCandyCrushables1 = TestCase $ do
 
 testFindNormalCandyCrushables2 :: Test
 testFindNormalCandyCrushables2 = TestCase $ do
-    let crushables = findNormalCandyCrushables crushableGrid (Coordinate 1, Coordinate 1)
+    let crushables = 
+            findNormalCandyCrushables crushableGrid (Coordinate 1, Coordinate 1)
     let expectedCrushables = Just (Disappear
             [(Coordinate 1, Coordinate 0),
              (Coordinate 1, Coordinate 1),
@@ -61,7 +63,8 @@ testFindNormalCandyCrushables2 = TestCase $ do
 
 testFindNormalCandyCrushables3 :: Test
 testFindNormalCandyCrushables3 = TestCase $ do
-    let crushables = findNormalCandyCrushables initialGrid (Coordinate 1, Coordinate 1)
+    let crushables = 
+            findNormalCandyCrushables initialGrid (Coordinate 1, Coordinate 1)
     let expectedCrushables = Nothing
     assertEqual "Crushables should be equal" expectedCrushables crushables
 
@@ -254,7 +257,8 @@ expectedCrushables
 testFinalAllCrushables :: Test
 testFinalAllCrushables = TestCase $ do
     let allCrushables = sort $ findAllNormalCrushables crushableGrid
-    assertEqual "Crushables should be equal" (sort expectedCrushables) allCrushables
+    assertEqual "Crushables should be equal" 
+        (sort expectedCrushables) allCrushables
 
 testApplyActions :: Test
 testApplyActions = TestCase $ do
@@ -287,7 +291,7 @@ testAutoCrushRelated = TestList [
 
 -- QuickCheck properties
 -- Property: Swapping candies twice results in the original grid
-prop_swapCandiesIdempotent :: Difficulty -> Property
+prop_swapCandiesIdempotent :: GameConst -> Property
 prop_swapCandiesIdempotent d = monadicIO $ do
     coord1 <- run $ generate $ genArbIntCoordPair d
     coord2 <- run $ generate $ genArbIntCoordPair d
@@ -297,7 +301,7 @@ prop_swapCandiesIdempotent d = monadicIO $ do
     return $ swappedTwice == grid
 
 -- Property: Applying an action preserves the grid size
-prop_applyActionPreservesGridSize :: Difficulty -> Property
+prop_applyActionPreservesGridSize :: GameConst -> Property
 prop_applyActionPreservesGridSize d = monadicIO $ do
     grid <- run $ generate $ genGameGrid d
     action <- run $ generate $ genArbAction d
@@ -307,7 +311,7 @@ prop_applyActionPreservesGridSize d = monadicIO $ do
                 (zip (board grid) (board newGrid))
 
 -- -- Property: all candies in a crushable group are the same
-prop_findNormalCandyCrushablesMatch :: Difficulty -> Property
+prop_findNormalCandyCrushablesMatch :: GameConst -> Property
 prop_findNormalCandyCrushablesMatch d = monadicIO $ do
     coord <- run $ generate $ genArbIntCoordPair d
     grid <- run $ generate $ genGameGrid d
@@ -321,8 +325,9 @@ prop_findNormalCandyCrushablesMatch d = monadicIO $ do
             in all (== head candies) candies
         allSameCandy _ _ = False
 
--- Property: fillAndCrushUntilStable should return a stable grid with no immediate crushables
-prop_fillAndCrushUntilStable :: Difficulty -> Property
+-- Property: fillAndCrushUntilStable should return a stable grid with no 
+-- immediate crushables
+prop_fillAndCrushUntilStable :: GameConst -> Property
 prop_fillAndCrushUntilStable d = monadicIO $ do
     grid <- run $ generate $ genGameGrid d
     stableGrid <- run $ fillAndCrushUntilStable grid (normalCandies grid)
@@ -331,7 +336,7 @@ prop_fillAndCrushUntilStable d = monadicIO $ do
     Test.QuickCheck.Monadic.assert $ board crushAgain == board stableGrid
 
 -- Property: Applying an action modifies step size correctly
-prop_actionStepSize :: Difficulty -> Property
+prop_actionStepSize :: GameConst -> Property
 prop_actionStepSize d = monadicIO $ do
     initalState <- run $ generate $ genGameState d
     initalAction <- run $ generate $ genArbUserAction d
@@ -356,7 +361,7 @@ prop_actionStepSize d = monadicIO $ do
                 newStepSize == initalStepSize - 1
 
 -- Property: undoing an action restores the grid to the previous state
-prop_undoRestoresGrid :: Difficulty -> Property
+prop_undoRestoresGrid :: GameConst -> Property
 prop_undoRestoresGrid d = monadicIO $ do
     initialState <- run $ generate $ genGameState d
     action <- run $ generate $ genArbReversibleAction d

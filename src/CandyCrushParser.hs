@@ -1,4 +1,4 @@
--- This is the parser specified for parsing data related to the Candy Crush game.
+-- This is the parser specified for parsing data related to the Candy Crush game
 module CandyCrushParser where
 import Phd
 import GeneralStateParser as GSP
@@ -20,6 +20,15 @@ import System.IO
 -- ---------------------------------------------------------------
 --                    Candy Crush Parser Implementations
 -- ---------------------------------------------------------------
+
+-- | Get the current GameConst from the parser state
+getGameConst :: Parser GameConst
+getGameConst = GSP.SP $ \state -> Right (pGameConst state, state)
+
+-- | Update the GameConst state with a modification function
+updateGameConst :: (GameConst -> GameConst) -> Parser ()
+updateGameConst f = GSP.SP $ \state -> 
+  Right ((), state { pGameConst = f (pGameConst state) })
 {------------------------ Effect Parsing ------------------------}
 -- | Parse a coordinate, expecting a colon or an integer
 coordinateP :: Parser Coordinate
@@ -27,7 +36,8 @@ coordinateP = constP ":" All <|> Coordinate <$> intP
 
 -- | Parse a pair of coordinates within parentheses
 coordinatePairP :: Parser CoordinatePair
-coordinatePairP = parens $ (,) <$> wsP coordinateP <* wsP (char ',') <*> wsP coordinateP
+coordinatePairP = 
+  parens $ (,) <$> wsP coordinateP <* wsP (char ',') <*> wsP coordinateP
 
 -- | Parse a list of coordinate pairs within brackets
 coordinateListP :: Parser [CoordinatePair]
@@ -75,7 +85,8 @@ effectNameP =
 
 -- | Parse the effect range line
 effectRangeLineP :: Parser EffectRange
-effectRangeLineP = stringIgnoreCase "effect_range:" *> wsP effectRangeP <* newline
+effectRangeLineP = 
+  stringIgnoreCase "effect_range:" *> wsP effectRangeP <* newline
 
 -- | Parse a comparison operator
 operatorP :: Parser Operator
@@ -114,15 +125,6 @@ effectDescriptionP = do
   <|> fatalErrorWithExpectStr "effectDescriptionP()"
     "`effect_description: <some description>`" 23
 
--- | Get the current Difficulty from the parser state
-getDifficulty :: Parser Difficulty
-getDifficulty = GSP.SP $ \state -> Right (pDifficulty state, state)
-
--- | Update the Difficulty state with a modification function
-updateDifficulty :: (Difficulty -> Difficulty) -> Parser ()
-updateDifficulty f = GSP.SP $ \state -> 
-  Right ((), state { pDifficulty = f (pDifficulty state) })
-
 -- | Parse an effect block
 effectP :: Parser ()
 effectP = do
@@ -133,42 +135,68 @@ effectP = do
   description <- updateFailToFatal "Error parsing effect description"
     effectDescriptionP
   let effect = Effect name range requirement description
-  updateDifficulty (\d -> d { effectMap = Map.insert name effect
+  updateGameConst (\d -> d { effectMap = Map.insert name effect
     (effectMap d) })
 
 -- | Parse multiple effect blocks
 effectsP :: Parser ()
 effectsP = void $ some $ skipCommentOrEmptyLines
-  *> expectString "effect_"  -- If a block starts with "effect_", it is an effect block
+  -- If a block starts with "effect_", it is an effect block
+  *> expectString "effect_" 
   *> effectP
   <* skipCommentOrEmptyLines
 
 {------------------------ Constant Parsing ------------------------}
--- | Parse a difficulty constant block
-difficultyConstantP :: Parser ()
-difficultyConstantP = do
-  -- Check if the block is a difficulty constant block
+-- | Parse a game constant block
+gameConstantP :: Parser ()
+gameConstantP = do
+  -- Check if the block is a game constant block
   skipCommentOrEmptyLines
-  constIgnoreCaseP "difficulty_constant" () <* newline
+  constIgnoreCaseP "game_constant" () <* newline
 
   -- Parse dimension
   constP "dimension:" ()
-    <|> fatalErrorWithExpectStr "difficultyConstantP()" "`dimension:`" 13
+    <|> fatalErrorWithExpectStr "gameConstantP()" "`dimension:`" 13
   dimensionVal <- (wsP intP <* newline)
     <|> fatalError "Error parsing dimension integer"
   when (dimensionVal < 3) $
     fatalError "dimension must be >= 3"
+    
+  skipCommentOrEmptyLines
 
   -- Parse max_steps
   constP "max_steps:" ()
-    <|> fatalErrorWithExpectStr "difficultyConstantP()" "`max_steps:`" 14
+    <|> fatalErrorWithExpectStr "gameConstantP()" "`max_steps:`" 14
   maxStepsVal <- (wsP intP <* newline)
     <|> fatalError "Error parsing max_steps integer"
   when (maxStepsVal < 3) $
     fatalError "max_steps must be >= 3"
 
-  updateDifficulty (\d -> d { dimension = dimensionVal
-    , maxSteps = maxStepsVal })
+  skipCommentOrEmptyLines
+
+  -- Parse score_per_candy
+  constP "score_per_candy:" ()
+    <|> fatalErrorWithExpectStr "gameConstantP()" "`score_per_candy:`" 19
+  scorePerCandyVal <- (wsP intP <* newline)
+    <|> fatalError "Error parsing score_per_candy integer"
+  when (scorePerCandyVal < 0) $
+    fatalError "score_per_candy must be >= 0"
+
+  skipCommentOrEmptyLines
+
+  -- Parse score_per_effect
+  constP "score_per_effect:" ()
+    <|> fatalErrorWithExpectStr "gameConstantP()" "`score_per_effect:`" 20
+  scorePerEffectVal <- (wsP intP <* newline)
+    <|> fatalError "Error parsing score_per_effect integer"
+  when (scorePerEffectVal < 0) $
+    fatalError "score_per_effect must be >= 0"
+
+  updateGameConst (\d -> d { 
+    dimension = dimensionVal, 
+    maxSteps = maxStepsVal, 
+    scorePerCandy = scorePerCandyVal, 
+    scorePerEffect = scorePerEffectVal })
 
 {------------------------ Candy Parsing ------------------------}
 -- | Parse the shape_name line
@@ -206,8 +234,8 @@ effectNameRefP = do
 -- | Retrieve the Effect from the effectMap based on name
 effectNameToEffect :: String -> Parser Effect
 effectNameToEffect name = do
-  difficultyVal <- getDifficulty
-  case Map.lookup name (effectMap difficultyVal) of
+  gameConstVal <- getGameConst
+  case Map.lookup name (effectMap gameConstVal) of
     Just effect -> return effect
     Nothing -> fatalError $ "Effect `" ++ name ++ "` not found in the effect map"
 
@@ -220,13 +248,14 @@ candyP = do
   effectName <- effectNameRefP
   effect <- effectNameToEffect effectName
   let candyDef = CandyDefinition name icon effectName
-  updateDifficulty (\d -> d { candyMap = Map.insert name
+  updateGameConst (\d -> d { candyMap = Map.insert name
     (Candy candyDef effect) (candyMap d) })
 
 -- | Parse multiple candy blocks
 candiesP :: Parser ()
 candiesP = void $ some $ skipCommentOrEmptyLines
-  *> expectString "shape_"  -- If a block starts with "shape_", it is a candy block
+  -- If a block starts with "shape_", it is a candy block
+  *> expectString "shape_"  
   *> candyP
   <* skipCommentOrEmptyLines
 
@@ -238,9 +267,9 @@ parseLoop = do
   when notEOF $ do
     effectsP
       <|> candiesP
-      <|> difficultyConstantP
+      <|> gameConstantP
       <|> failErrorWithExpectStr "parseLoop():"
-        "one of [`effect_`, `shape_`, `difficulty_constant`]" 10
+        "one of [`effect_`, `shape_`, `game_constant`]" 10
     parseLoop
 
 {------------------------ Action Parsing ------------------------}
@@ -251,17 +280,17 @@ actionIntP dim errorMessage = do
         then failError errorMessage
         else return coord
 
-parseAction :: Difficulty -> String -> Either ParseError Action
-parseAction difficulty input = GSP.doParse (actionParser difficulty) 
-                              (CandyFileParser input 1 emptyDifficulty) >>=
+parseAction :: GameConst -> String -> Either ParseError Action
+parseAction gameConst input = GSP.doParse (actionParser gameConst) 
+                              (CandyFileParser input 1 defaultGameConst) >>=
                                  \(action, _) -> Right action
 
--- Modify actionParser to include difficulty for parsing Cheat
-actionParser :: Difficulty -> Parser Action
-actionParser difficulty = wsP $
-    parseSwap  (dimension difficulty) <|>
-    parseClick (dimension difficulty)<|>
-    parseCheat difficulty <|>
+-- Modify actionParser to include gameConst for parsing Cheat
+actionParser :: GameConst -> Parser Action
+actionParser gameConst = wsP $
+    parseSwap  (dimension gameConst) <|>
+    parseClick (dimension gameConst)<|>
+    parseCheat gameConst <|>
     parseConstantAction "undo" Undo <|>
     parseConstantAction "quit" Quit <|>
     parseConstantAction "hint" Hint
@@ -289,14 +318,14 @@ parseConstantAction :: String -> Action -> Parser Action
 parseConstantAction keyword action = stringP keyword *> pure action
 
 -- parse "cheat" action
-parseCheat :: Difficulty -> Parser Action
-parseCheat difficulty = do
+parseCheat :: GameConst -> Parser Action
+parseCheat gameConst = do
     stringP "cheat"
-    let dim = dimension difficulty
+    let dim = dimension gameConst
     x <- actionIntP dim "x must be within the grid and non-negative"
     y <- actionIntP dim "y must be within the grid and non-negative"
     candyName <- stripP (some (satisfy (/= '\n')))
-    case Data.Map.lookup candyName (candyMap difficulty) of
+    case Data.Map.lookup candyName (candyMap gameConst) of
         Just candy -> return $ Cheat (Coordinate x, Coordinate y) candy
         Nothing -> fatalError $ "Candy '" ++ candyName ++ "' does not exist."
 
@@ -326,33 +355,36 @@ candyGetLine = do
                     inputLoop (acc ++ [char]) -- Add character to input
               | otherwise -> inputLoop acc -- Ignore other control characters
 {---------------------------- File Parse ------------------------------}
--- | Parse the entire input file into a Difficulty object
-fileP :: String -> Either ParseError Difficulty
+-- | Parse the entire input file into a gameConst object
+fileP :: String -> Either ParseError GameConst
 fileP input = case doParse (parseLoop <* eof)
-  (CandyFileParser input 1 emptyDifficulty) of
-    Right (_, state) -> Right (pDifficulty state)  -- Return the parsed Difficulty
+  (CandyFileParser input 1 defaultGameConst) of
+    Right (_, state) -> Right (pGameConst state)  -- Return the parsed gameConst
     Left err -> Left err                           -- Return the parse error
 
--- | Take a filename and return the parsed Difficulty object
-parseFile :: String -> IO (Either ParseError Difficulty)
+-- | Take a filename and return the parsed GameConst object
+parseFile :: String -> IO (Either ParseError GameConst)
 parseFile filename = do
   contentResult <- try (readFile filename) :: IO (Either IOException String)
   return $ either
-    (Left . (\e -> FatalError ("Error reading `" ++ filename ++ "`: " ++ show e) 0))
+    (Left . (\e -> 
+      FatalError ("Error reading `" ++ filename ++ "`: " ++ show e) 0))
     parseAndValidate contentResult
 
 -- | Parse and validate the content of a file
-parseAndValidate :: String -> Either ParseError Difficulty
+parseAndValidate :: String -> Either ParseError GameConst
 parseAndValidate content =
   case fileP content of
     Left err -> Left err
-    Right difficulty -> case validateDifficulty difficulty of
+    Right gameConst -> case validateGameConst gameConst of
       Left errMsg -> Left (FatalError errMsg 0)
-      Right validDifficulty -> Right validDifficulty
+      Right validGameConst -> Right validGameConst
 
-validateDifficulty :: Difficulty -> Either String Difficulty
-validateDifficulty (Difficulty dimension candyMap _ maxSteps)
+validateGameConst :: GameConst -> Either String GameConst
+validateGameConst (GameConst dimension candyMap _ maxSteps 
+  scorePerCandy scorePerEffect)
   | dimension <= 0 = Left "Dimension must be greater than 0"
   | maxSteps < 3 = Left "maxSteps must be at least 3"
   | Map.size candyMap < 3 = Left "candyMap must contain at least 3 candies"
-  | otherwise = Right (Difficulty dimension candyMap Map.empty maxSteps)
+  | otherwise = Right (GameConst dimension candyMap Map.empty maxSteps 
+    scorePerCandy scorePerEffect)

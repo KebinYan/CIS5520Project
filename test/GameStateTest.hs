@@ -65,6 +65,13 @@ testAddScore = TestCase $ do
     nextState <- execStateT (addScore 100) initialState
     assertEqual "Score updated" 100 (score nextState)
 
+testResetScoreChange :: Test
+testResetScoreChange = TestCase $ do
+    let initialState = GameState crushableGrid easy Nothing 50 100
+    updatedState <- execStateT resetScoreChange initialState
+    let updatedScoreChange = scoreChange (currentGrid updatedState)
+    assertEqual "Score change should be reset to 0" 0 updatedScoreChange
+
 testUndoable :: Test
 testUndoable = TestCase $ do
     let grid = initialGrid
@@ -83,14 +90,14 @@ testAddScoreAccumulation = TestCase $ do
 
 -- QuickCheck properties
 -- Property: Grid dimensions match difficulty
-prop_gridDimensionsMatch :: Difficulty -> Property
+prop_gridDimensionsMatch :: GameConst -> Property
 prop_gridDimensionsMatch d = monadicIO $ do
     grid <- run $ initializeGrid d
     let dim = dimension d
     Test.QuickCheck.Monadic.assert $ length (board grid) == dim
 
 -- Property: All candies in a randomly generated game grid are valid
-prop_allCandiesValid :: Difficulty -> Property
+prop_allCandiesValid :: GameConst -> Property
 prop_allCandiesValid d = monadicIO $ do
     grid <- run $ initializeGrid d
     let validShapes = map (shapeName . candyDef) (normalCandies grid)
@@ -108,7 +115,7 @@ prop_splitIntoRows xs = not (null xs) ==> monadicIO $ do
     Test.QuickCheck.Monadic.assert $ concat (splitIntoRows n xs) == xs
 
 -- Property: update grid and then undo should revert to original state
-prop_updateUndo :: Difficulty -> Property
+prop_updateUndo :: GameConst -> Property
 prop_updateUndo d = monadicIO $ do
     gameState <- run $ generate (genGameState d)
     updatedState <- run $ 
@@ -118,7 +125,7 @@ prop_updateUndo d = monadicIO $ do
         currentGrid prevState == currentGrid gameState
 
 -- Property: undo step can only consecutively undo once
-prop_undoOnce :: Difficulty -> Property
+prop_undoOnce :: GameConst -> Property
 prop_undoOnce d = monadicIO $ do
     gameState <- run $ generate (genGameState d)
     updatedState <- run $ 
@@ -138,6 +145,7 @@ runUnitTests = runTestTT $
         TestLabel "testUndoStep" testUndoStep,
         TestLabel "testGetRemainingSteps" testGetRemainingSteps,
         TestLabel "testAddScore" testAddScore,
+        TestLabel "testResetScoreChange" testResetScoreChange,
         TestLabel "testUndoable" testUndoable,
         TestLabel "testAddScoreAccumulation" testAddScoreAccumulation
     ]

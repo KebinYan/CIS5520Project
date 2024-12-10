@@ -73,9 +73,13 @@ effect_range: Arbitrary [(0, :)]
 effect_requirement: =4
 effect_description: Clears the entire row when matched.
 
-DIFFICULTY_CONSTANT
+GAME_CONSTANT
 dimension: 9
 max_steps: 30
+// score per candy that is crushed
+score_per_candy: 10 
+// bouns score per effect that is triggered
+score_per_effect: 50 
 
 shape_name: Triangle
 shape_icon: 🔺

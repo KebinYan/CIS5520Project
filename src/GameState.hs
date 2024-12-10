@@ -8,16 +8,19 @@ import Data.Maybe
 import Data.Map (Map, update, elems)
 import Text.Printf (printf)
 
--- Initialize the grid based on difficulty
-initializeGrid :: Difficulty -> IO GameGrid
-initializeGrid d = do
-    let dim = dimension d
-    let normalCandies = extractNormalCandies (elems (candyMap d))
+-- Initialize the grid based on game constants
+initializeGrid :: GameConst -> IO GameGrid
+initializeGrid gc = do
+    let dim = dimension gc
+    let normalCandies = extractNormalCandies (elems (candyMap gc))
     candiesInBoard <- generateRandomCandyList (dim * dim) normalCandies
     return $ GameGrid {
         board = splitIntoRows dim candiesInBoard,
         normalCandies = normalCandies,
-        specialCandies = extractSpecialCandies dim (elems (candyMap d))
+        specialCandies = extractSpecialCandies dim (elems (candyMap gc)),
+        crushScore = scorePerCandy gc,
+        effectScore = scorePerEffect gc,
+        scoreChange = 0
     }
 
 -- Split a list into rows of a given length
@@ -28,14 +31,14 @@ splitIntoRows n = go
     go ys = let (row, rest) = splitAt n ys in row : go rest
 
 -- Initialize the game state
-initializeGameState :: Difficulty -> IO GameState
-initializeGameState d = do
-    grid <- initializeGrid d
+initializeGameState :: GameConst -> IO GameState
+initializeGameState gc = do
+    grid <- initializeGrid gc
     return $ GameState {
         currentGrid = grid,
-        difficulty = d,
+        gameConst = gc,
         lastGrid = Nothing,
-        remainingSteps = maxSteps d,
+        remainingSteps = maxSteps gc,
         score = 0
     }
 
@@ -69,13 +72,19 @@ getRemainingSteps = gets remainingSteps
 addScore :: Int -> GameMonad ()
 addScore points = modify $ \s -> s { score = score s + points }
 
+-- Reset changed score to 0 for each step
+resetScoreChange :: GameMonad ()
+resetScoreChange = modify $ \s -> s {
+    currentGrid = (currentGrid s) { scoreChange = 0 }
+}
+
 -- Check if undo is possible
 undoable :: GameMonad Bool
 undoable = gets (isJust . lastGrid)
 
 -- Function to format and print the board beautifully
 printGrid :: GameGrid -> IO ()
-printGrid (GameGrid board _ _) = do
+printGrid (GameGrid board _ _ _ _ _) = do
     let dim = length board
     -- Print column numbers, formatted to match cell widths
     putStrLn $ "  " ++ unwords (map (printf "%2d") [0 .. (dim - 1)])
@@ -96,7 +105,7 @@ printStateGrid(GameState { currentGrid = grid }) = printGrid grid
 updateBoard :: [[Candy]] -> GameGrid -> GameGrid
 updateBoard newBoard g = g { board = newBoard }
 
-updateIOBoard :: IO [[Candy]] -> IO GameGrid -> IO GameGrid
-updateIOBoard ioBoard ioGrid = do
-  newBoard <- ioBoard
-  updateBoard newBoard <$> ioGrid
+updateScore :: Int -> GameGrid -> GameGrid
+updateScore newScore g = g {
+    scoreChange = scoreChange g + newScore
+}
