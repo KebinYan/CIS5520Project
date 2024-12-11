@@ -171,6 +171,14 @@ instance Eq Action where
     (Cheat c1 candy1) == (Cheat c2 candy2) = c1 == c2 && candy1 == candy2
     _ == _ = False
 
+class ActionHandler a where
+    handle :: Bool -> GameState -> a -> IO GameState
+
+data WrappedAction = forall a. ActionHandler a => Wrap a
+
+instance ActionHandler WrappedAction where
+    handle verbose state (Wrap action) = handle verbose state action
+
 -- Constructor for Disappear action that sorts the coordinates
 constructDisappear :: [CoordinatePair] -> Action
 constructDisappear = Disappear . sortCoordinates

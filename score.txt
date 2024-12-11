@@ -1,0 +1,11 @@
+dimension: 7
+maxSteps: 40
+score: 66
+dimension: 5
+maxSteps: 50
+score: 66
+
+
+dimension: 9
+maxSteps: 30
+score: 45

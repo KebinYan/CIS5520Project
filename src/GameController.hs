@@ -16,6 +16,57 @@ import Prelude
 import Phd
 import CandyCrushParser
 
+instance ActionHandler Action where
+    handle verbose state (Swap c1 c2) = do
+        when verbose $
+            putStrLn $ "Swapping " ++ show c1 ++ " with " ++ show c2
+        newGrid <- applySwap (currentGrid state) c1 c2
+        execStateT (do
+            updateGridState newGrid
+            addScore (scoreChange newGrid)
+            when verbose $ liftIO $ printGrid newGrid
+            ) state
+
+    handle verbose state (Click coord) = do
+        when verbose $
+            putStrLn $ "Clicking on " ++ show coord
+        newGrid <- applyClick (currentGrid state) coord
+        execStateT (do
+            updateGridState newGrid
+            addScore (scoreChange newGrid)
+            when verbose $ liftIO $ printGrid newGrid
+            ) state        
+
+    handle verbose state Undo = do
+        when verbose $ putStrLn "Undoing last action"
+        execStateT undoStep state
+
+    handle verbose state (Cheat coord candy) = do
+        when verbose $
+            putStrLn $ "Cheating at " ++ show coord ++ " with candy " ++ show candy
+        newGrid <- applyCheat (currentGrid state) coord candy
+        execStateT (do updateGridState newGrid) state
+    
+    handle verbose state Hint = do
+        let possibleMove = findMovable (currentGrid state)
+        case possibleMove of
+            Just ((Coordinate x1, Coordinate y1), (Coordinate x2, Coordinate y2)) -> do
+                putStrLn $ "Hint: Swap (" ++ show x1 ++ "," ++ show y1
+                    ++ ") with (" ++ show x2 ++ "," ++ show y2 ++ ")"
+                return state
+            Nothing -> do
+                putStrLn "No possible moves available"
+                return state
+
+    handle verbose state Quit = do
+        printGameInfo verbose state
+        putStrLn "Quitting game"
+        return state
+
+    handle verbose state _ = do
+        when verbose $ putStrLn "Invalid action"
+        return state    
+
 -- The main game loop
 gameLoop :: GameConst -> IO ()
 gameLoop d = do
@@ -46,22 +97,11 @@ gameStep s = do
     input <- candyGetLine
     let gc = gameConst state
     case parseAction gc input of
-        Right action ->
-            case action of
-                Quit -> do
-                    printGameInfo True state
-                    putStrLn "Quitting game"
-                    return ()
-                Hint -> case possibleMove of
-                    Just ((Coordinate x1, Coordinate y1), 
-                        (Coordinate x2, Coordinate y2)) -> do
-                        putStrLn $ "Hint: Swap (" ++ show x1 ++ "," ++ show y1
-                            ++ ") with (" ++ show x2 ++ "," ++ show y2 ++ ")"
-                        gameStep state
-                    -- This should never happen
-                    _ -> putStrLn "No possible moves available"
-                _ -> do
-                    updatedState <- handleAction True state action
+        Right action -> do
+            updatedState <- handleAction True state action
+            if action == Quit
+                then return ()
+                else do
                     stableState <- fillAndCrushStateIO updatedState
                     gameStep stableState
         Left _      -> do
@@ -69,43 +109,7 @@ gameStep s = do
             gameStep state
 
 handleAction :: Bool -> GameState -> Action -> IO GameState
-handleAction verbose state action = case action of
-    Swap (Coordinate x1, Coordinate y1) (Coordinate x2, Coordinate y2) -> do
-        when verbose $
-            putStrLn $
-                "Swapping (" ++ show x1 ++ "," ++ show y1 ++ ") with ("
-                ++ show x2 ++ "," ++ show y2 ++ ")"
-        newGrid <- applySwap (currentGrid state)
-            (Coordinate x1, Coordinate y1)
-            (Coordinate x2, Coordinate y2)
-        execStateT (do
-            updateGridState newGrid
-            addScore (scoreChange newGrid)
-            when verbose $ liftIO $ printGrid newGrid
-            ) state
-    Cheat (Coordinate x, Coordinate y) candy -> do
-        when verbose $
-            putStrLn $
-                "Cheating at (" ++ show x ++ "," ++ show y ++ ") with candy '"
-                ++ shapeName (candyDef candy) ++ "'"
-        newGrid <- applyCheat (currentGrid state)
-            (Coordinate x, Coordinate y) candy
-        execStateT (do updateGridState newGrid) state
-    Click (x, y) -> do
-        when verbose $
-            putStrLn $ "Clicking on (" ++ show x ++ "," ++ show y ++ ")"
-        newGrid <- applyClick (currentGrid state) (x, y)
-        execStateT (do
-            updateGridState newGrid
-            addScore (scoreChange newGrid)
-            when verbose $ liftIO $ printGrid newGrid
-            ) state
-    Undo -> do
-        when verbose $ putStrLn "Undosing last action"
-        execStateT undoStep state
-    _ -> do
-        when verbose $ putStrLn "Invalid action"
-        return state
+handleAction verbose state action = handle verbose state (Wrap action)
 
 applyCheat :: GameGrid -> CoordinatePair -> Candy -> IO GameGrid
 applyCheat grid coord candy = do
