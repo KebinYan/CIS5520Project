@@ -226,16 +226,16 @@ printGameInfo verbose gameState = do
             evaluate (length contents) -- Force load entire content into memory
             return contents)
         let blocks = splitBlocks contents
-            matchingBlock = findBlock blocks dim steps
-            updatedBlocks =
-                case matchingBlock of
-                    Just _  -> map (\b ->
-                        if isMatchingBlock b dim steps
-                        then lines $ updateScoreBlock dim steps scoreVal b
-                        else lines b) blocks
-                    Nothing -> blocks : [lines block]
+        print blocks
+        let updatedBlocks = case findBlock blocks dim steps of
+                Nothing -> blocks ++ [block]
+                Just match -> do
+                    let updatedBlock =
+                            unlines $ map (updateScoreLine scoreVal) match
+                    List.map (\b -> if isMatchingBlock b dim steps
+                                    then updatedBlock else b) blocks
         -- Write back the updated contents
-        writeFile fileName (unlines $ List.intercalate [""] updatedBlocks)
+        writeFile fileName (List.intercalate "\n\n" updatedBlocks)
         when verbose $ putStrLn "Updated score.txt with the data."
 
 formatBlock :: Int -> Int -> Int -> String
@@ -266,26 +266,27 @@ splitBlocks :: String -> [String]
 splitBlocks = Prelude.filter (not . null) . splitOn "\n\n"
 
 splitOn :: String -> String -> [String]
-splitOn delim str = go str []
+splitOn delim = foldr step [[]]
   where
-    go [] current = [reverse current]
-    go s current
-      | delim `List.isPrefixOf` s =
-        reverse current : go (drop (length delim) s) []
-      | otherwise = case s of
-          (c:cs) -> go cs (c : current)
+    step c acc@(curr : rest)
+      | startsWith delim (c : curr) =
+          [] : dropDelim delim (c : curr) : rest
+      | otherwise = (c : curr) : rest
+    step _ _ = error "Unreachable"
 
-findBlock :: [String] -> Int -> Int -> Maybe String
+    startsWith [] _ = True
+    startsWith _ [] = False
+    startsWith (x:xs) (y:ys) = x == y && startsWith xs ys
+
+    dropDelim [] xs = xs
+    dropDelim _ [] = []
+    dropDelim (_:ds) (_:xs) = dropDelim ds xs
+
+findBlock :: [String] -> Int -> Int -> Maybe [String]
 findBlock blocks dim steps =
-    List.find (\block -> ("dimension: " ++ show dim) `List.isInfixOf` block &&
-                    ("maxSteps: " ++ show steps) `List.isInfixOf` block) blocks
-
-updateScoreBlock :: Int -> Int -> Int -> String -> String
-updateScoreBlock dim steps newScore block
-    | ("dimension: " ++ show dim) `List.isInfixOf` block &&
-      ("maxSteps: " ++ show steps) `List.isInfixOf` block =
-        unlines $ map (updateScoreLine newScore) (lines block)
-    | otherwise = block
+    lines <$> List.find (\b ->
+        ("dimension: " ++ show dim) `List.isInfixOf` b &&
+        ("maxSteps: " ++ show steps) `List.isInfixOf` b) blocks
 
 updateScoreLine :: Int -> String -> String
 updateScoreLine newScore line
