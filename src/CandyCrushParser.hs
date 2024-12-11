@@ -343,15 +343,18 @@ candyGetLine = do
         case char of
             '\n' -> do                 -- Handle Enter key
                 putChar '\n'
+                hFlush stdout
                 return acc
             '\DEL' -> do               -- Handle Backspace key
                 if null acc
                     then inputLoop acc -- Ignore if no characters to delete
                     else do
                         putStr "\b \b" -- Erase character on terminal
+                        hFlush stdout
                         inputLoop (init acc) -- Remove last character from input
             _ | isPrint char -> do     -- Handle printable characters
                     putChar char       -- Display the character
+                    hFlush stdout
                     inputLoop (acc ++ [char]) -- Add character to input
               | otherwise -> inputLoop acc -- Ignore other control characters
 {---------------------------- File Parse ------------------------------}

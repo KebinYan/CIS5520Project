@@ -121,7 +121,7 @@ effect_name: Bomb
 
 // clears the entire row and column
 shape_name: StripedCross
-shape_icon: ☩
+shape_icon: ❌
 effect_name: StripedCross
 
 shape_name: StripedRow

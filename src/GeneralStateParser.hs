@@ -69,7 +69,8 @@ fatalError msg = SP $ \state ->
   Left (FatalError (msg ++ "\n" ++ show state) (getLineNum state))
 
 -- | Throw a fatal error with expected string information
-fatalErrorWithExpectStr :: (ParserState s, Show s) => String -> String -> Int -> StateParser s a
+fatalErrorWithExpectStr :: (ParserState s, Show s) => String -> String -> Int 
+  -> StateParser s a
 fatalErrorWithExpectStr msg expectStr len = SP $ \state ->
   Left (FatalError (msg ++ " expected: `" ++ expectStr ++ "`, but got `"
     ++ peekStr len state ++ "`\n" ++ show state) (getLineNum state))
@@ -79,20 +80,23 @@ failError :: ParserState s => String -> StateParser s a
 failError msg = SP $ \state -> Left (FailError msg (getLineNum state))
 
 -- | Throw a recoverable failure error with expected string information
-failErrorWithExpectStr :: ParserState s => String -> String -> Int -> StateParser s a
+failErrorWithExpectStr :: ParserState s => String -> String -> Int -> 
+  StateParser s a
 failErrorWithExpectStr msg expectStr len = SP $ \state ->
   Left (FailError (msg ++ ", expected: `" ++ expectStr
     ++ "`, but got `" ++ peekStr len state ++ "`") (getLineNum state))
 
 -- | Upgrade a FailError to a FatalError with a custom message
-updateFailToFatal :: ParserState s => String -> StateParser s a -> StateParser s a
+updateFailToFatal :: ParserState s => String -> StateParser s a -> 
+  StateParser s a
 updateFailToFatal errorMsg parser = SP $ \state -> case doParse parser state of
   Left (FailError msg _) -> Left (FatalError (errorMsg ++ ": " ++ msg)
     (getLineNum state))  -- Upgrade to FatalError
   result -> result          -- Return other results
 
 -- | Combine two parsers: upgrade to FatalError if the first succeeds
-upgradeToFatalIfFirstSucceeds :: ParserState s => String -> StateParser s () -> StateParser s a -> StateParser s a
+upgradeToFatalIfFirstSucceeds :: ParserState s => String -> StateParser s () -> 
+  StateParser s a -> StateParser s a
 upgradeToFatalIfFirstSucceeds errorMsg conditionParser mainParser = do
   _ <- conditionParser
   SP $ \state -> case doParse mainParser state of
@@ -137,7 +141,8 @@ eof = SP $ \s -> case getInput s of
     (getLineNum s))
 
 -- | Filter parsing results based on a predicate
-filter :: (Show a, ParserState s) => (a -> Bool) -> StateParser s a -> StateParser s a
+filter :: (Show a, ParserState s) => (a -> Bool) -> StateParser s a -> 
+  StateParser s a
 filter f p = SP $ \s -> case doParse p s of
   Left err -> Left err  -- Error already includes line number
   Right (c, s') ->
@@ -204,15 +209,18 @@ intP = do
         else fatalError $ "Invalid integer: " ++ numStr ++ nextChar
 
 -- | Parse a string surrounded by specific open and close parsers
-between :: ParserState s => StateParser s open -> StateParser s a -> StateParser s close -> StateParser s a
+between :: ParserState s => StateParser s open -> StateParser s a -> 
+  StateParser s close -> StateParser s a
 between open p close = open *> p <* close
 
 -- | Parse a list of items separated by a separator
-sepBy :: ParserState s => StateParser s a -> StateParser s sep -> StateParser s [a]
+sepBy :: ParserState s => StateParser s a -> StateParser s sep -> 
+  StateParser s [a]
 sepBy p sep = sepBy1 p sep <|> pure []
 
 -- | Parse one or more items separated by a separator
-sepBy1 :: ParserState s => StateParser s a -> StateParser s sep -> StateParser s [a]
+sepBy1 :: ParserState s => StateParser s a -> StateParser s sep ->
+  StateParser s [a]
 sepBy1 p sep = (:) <$> p <*> many (sep *> p)
 
 -- | Count occurrences of a character in a string
@@ -300,7 +308,8 @@ anyChar :: ParserState s => StateParser s Char
 anyChar = get
 
 -- | Parse many characters until a terminating parser succeeds
-manyTill :: ParserState s => StateParser s a -> StateParser s end -> StateParser s [a]
+manyTill :: ParserState s => StateParser s a -> StateParser s end -> 
+  StateParser s [a]
 manyTill p end = go
   where
     go = (end *> pure []) <|> (:) <$> p <*> go
