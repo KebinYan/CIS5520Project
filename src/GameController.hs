@@ -54,13 +54,13 @@ instance ActionHandler Action where
                 putStrLn $ "Hint: Swap (" ++ show x1 ++ "," ++ show y1
                     ++ ") with (" ++ show x2 ++ "," ++ show y2 ++ ")"
                 return state
-            Nothing -> do
+            _ -> do
                 putStrLn "No possible moves available"
                 return state
 
     handle verbose state Quit = do
         printGameInfo verbose state
-        putStrLn "Quitting game"
+        when verbose $ putStrLn "Quitting game"
         return state
 
     handle verbose state _ = do
