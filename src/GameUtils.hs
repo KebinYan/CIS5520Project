@@ -226,7 +226,6 @@ printGameInfo verbose gameState = do
             evaluate (length contents) -- Force load entire content into memory
             return contents)
         let blocks = splitBlocks contents
-        print blocks
         let updatedBlocks = case findBlock blocks dim steps of
                 Nothing -> blocks ++ [block]
                 Just match -> do

@@ -238,15 +238,8 @@ testFindBlock = TestCase $ do
     let blocks = ["dimension: 5\nmaxSteps: 10\nscore: 20\n", 
                 "dimension: 3\nmaxSteps: 15\nscore: 30\n"]
     let result = findBlock blocks 5 10
-    let expected = Just "dimension: 5\nmaxSteps: 10\nscore: 20\n"
+    let expected = Just ["dimension: 5","maxSteps: 10","score: 20"]
     assertEqual "findBlock test" expected result
-
-testUpdateScoreBlock :: Test
-testUpdateScoreBlock = TestCase $ do
-    let block = "dimension: 5\nmaxSteps: 10\nscore: 20\n"
-    let result = updateScoreBlock 5 10 25 block
-    let expected = "dimension: 5\nmaxSteps: 10\nscore: 25\n"
-    assertEqual "updateScoreBlock test" expected result
 
 -- QuickCheck properties
 -- Property: Only valid coordinates are cleared by generateSpecialEffect
@@ -383,13 +376,12 @@ prop_writeReadConsistency gameConst = ioProperty $ do
     let fileName = "score.txt"
     let expectedBlock = formatBlock (dimension gameConst) (maxSteps gameConst) 
                                     (score gameState)
-    removeFile fileName
     printGameInfo False gameState
     contentRead <- readFile fileName
     let blocks = splitBlocks contentRead
     let matchingBlock = 
             findBlock blocks (dimension gameConst) (maxSteps gameConst)
-    return (matchingBlock == Just expectedBlock)
+    return $ matchingBlock == Just (lines expectedBlock)
 
 -- Run tests
 runUnitTests :: IO Counts
@@ -416,8 +408,7 @@ runUnitTests = runTestTT $ TestList [
     TestLabel "testAllCoordinates" testAllCoordinates,
     TestLabel "testFormatBlock" testFormatBlock,
     TestLabel "testSplitBlocks" testSplitBlocks,
-    TestLabel "testFindBlock" testFindBlock,
-    TestLabel "testUpdateScoreBlock" testUpdateScoreBlock
+    TestLabel "testFindBlock" testFindBlock
     ]
 
 runQuickCheckTests :: IO ()

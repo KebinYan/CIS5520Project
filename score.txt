@@ -1,13 +1,13 @@
 dimension: 9
 maxSteps: 30
-score: 50
+score: 34
 
 
 dimension: 5
 maxSteps: 50
-score: 0
+score: 86
 
 
 dimension: 7
 maxSteps: 40
-score: 30
+score: 31
