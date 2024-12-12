@@ -33,7 +33,7 @@ The project code is in three separate places:
     - [Phd.hs](src/Phd.hs):
     This module provides a plain Haskell definition framework for the Candy 
     Crush game, including data types, game states, and actions. It serves as 
-    the core data and logic layer for the game.
+    the core data layer for the game.
     - [GameState.hs](src/GameState.hs):
     This module manages the state and grid of the Candy Crush game. It defines 
     functions for initializing, modifying, and querying the game state, 
